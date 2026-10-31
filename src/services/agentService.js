@@ -2,7 +2,7 @@ const config = require('../config');
 const { githubIdentity, gitlabIdentity } = require('./identityService');
 const whitelist = require('./whitelistService');
 const { toComment, REPLY_MARKER } = require('./eventService');
-const { parseComment, MODEL_LINE } = require('./commentParser');
+const { parseComment, stripTrigger } = require('./commentParser');
 const github = require('./githubService');
 const gitlab = require('./gitlabService');
 const keys = require('./keyService');
@@ -50,14 +50,6 @@ function stripReply(body) {
   return text;
 }
 
-// A user's earlier request starts with its "@vendor/model" line; keep only the question.
-function stripModelLine(body) {
-  const text = body.replace(/\r\n/g, '\n');
-  const newline = text.indexOf('\n');
-  const first = (newline === -1 ? text : text.slice(0, newline)).trim();
-  return MODEL_LINE.test(first) ? (newline === -1 ? '' : text.slice(newline + 1)).trim() : text.trim();
-}
-
 // Earlier comments as chat messages, oldest first: our replies are "assistant", everyone else
 // is "user" with their @login. The comment being answered is left out (it goes last), and the
 // oldest messages are dropped once the history passes `maxChars`.
@@ -70,7 +62,7 @@ function buildHistory(comments, currentCommentId, maxChars = MAX_HISTORY_CHARS) 
       const content = stripReply(body);
       if (content) messages.push({ role: 'assistant', content });
     } else {
-      const content = stripModelLine(body);
+      const content = stripTrigger(body);
       if (content) messages.push({ role: 'user', content: `@${c.author || 'unknown'}: ${content}` });
     }
   }
@@ -193,12 +185,14 @@ async function processTask(task) {
   const comment = toComment(task.platform, task.event, payload);
   if (!comment) return 'skipped';
 
-  // The agent only answers when line 1 names the model, e.g. "@openrouter/free".
-  const { model, prompt } = parseComment(comment.commentBody);
-  if (!model || !prompt) {
-    console.info(`[agent] task ${task.id} skipped: line 1 must name a model, such as @${config.ai.defaultModel}, followed by a question`);
+  // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
+  const parsed = parseComment(comment.commentBody);
+  const { prompt } = parsed;
+  if (!(parsed.auto || parsed.model) || !prompt) {
+    console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model, followed by a question`);
     return 'skipped';
   }
+  const model = parsed.model || config.ai.defaultModel;
 
   // Check the whitelist again: access may have been revoked while the task was queued.
   const identity = task.platform === 'github' ? githubIdentity(payload) : gitlabIdentity(payload);

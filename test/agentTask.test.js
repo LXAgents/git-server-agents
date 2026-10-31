@@ -48,9 +48,9 @@ function stubAll(t, { member = true, history = [] } = {}) {
   return calls;
 }
 
-test('a comment without @vendor/model on line 1 is skipped before any API call', async (t) => {
+test('a comment without @agents or @vendor/model on line 1 is skipped before any API call', async (t) => {
   const calls = stubAll(t);
-  for (const body of ['What files do I have?', '@alice what do you think?', '@openrouter/free']) {
+  for (const body of ['What files do I have?', '@alice what do you think?', '@openrouter/free', '@agents']) {
     assert.equal(await processTask(githubTask(body)), 'skipped');
   }
   assert.equal(whitelist.verify.mock.callCount(), 0);
@@ -133,4 +133,10 @@ test('a GitLab MR reads notes, the diff and files at the MR head commit', async 
   assert.deepEqual(refs, ['headsha']);
   assert.deepEqual(gitlab.isGroupMember.mock.calls[0].arguments, ['grp', '7']);
   assert.deepEqual(keys.getProviderKeys.mock.calls[0].arguments[2], installation);
+});
+
+test('@agents answers with the default model until one is stored', async (t) => {
+  const calls = stubAll(t);
+  assert.equal(await processTask(githubTask('@agents what changed?')), 'success');
+  assert.equal(calls.complete[0].model, 'openrouter/free');
 });
