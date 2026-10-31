@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.9.0](1/9/0/CHANGELOG.md) | Operator sign-in removed; owners run the admin API | `CHANGELOG.md` |
 | [1.8.0](1/8/0/CHANGELOG.md) | One owner per platform | `CHANGELOG.md` |
 | [1.7.0](1/7/0/CHANGELOG.md) | Owner role, profiles from the platform, one platform per session | `CHANGELOG.md` |
 | [1.6.0](1/6/0/CHANGELOG.md) | Models and keys per user, org and repository; @agents | `CHANGELOG.md` |
