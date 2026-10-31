@@ -1,7 +1,7 @@
 ---
 name: install-warnings
 description: Task record for clearing the npm install warnings in git-server-agents (1.1.2).
-status: in-progress
+status: done
 ---
 
 # Install warnings
