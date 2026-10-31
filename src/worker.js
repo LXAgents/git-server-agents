@@ -86,7 +86,7 @@ function start({ pollMs = config.worker.pollMs, concurrency = config.worker.conc
     try {
       for (const promise of await claimBatch(concurrency - running.size)) {
         running.add(promise);
-        promise.finally(() => {
+        void promise.finally(() => {
           running.delete(promise);
           void fill();
         });
