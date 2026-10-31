@@ -1,4 +1,5 @@
 const axios = require('axios');
+const config = require('../config');
 
 // An HTTP-shaped error for a failure OpenRouter reports inside a 200 response.
 function bodyError(status, error) {
@@ -16,7 +17,7 @@ function emptyError(model) {
 
 // One chat completion. Returns the assistant message ({ content, tool_calls? }). Every failure
 // is tagged source "openrouter" (or "empty"), so agentErrors can tell it from a platform error.
-async function complete({ baseUrl, apiKey, model, messages, tools }) {
+async function complete({ baseUrl, apiKey, model, messages, tools, timeout = config.ai.modelTimeoutMs }) {
   const body = { model, messages };
   if (tools && tools.length) body.tools = tools;
   let data;
@@ -27,7 +28,7 @@ async function complete({ baseUrl, apiKey, model, messages, tools }) {
         'Content-Type': 'application/json',
         'X-Title': 'git-server-agents',
       },
-      timeout: 120_000,
+      timeout,
     }));
   } catch (err) {
     err.source = 'openrouter';

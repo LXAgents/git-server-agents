@@ -1,4 +1,5 @@
 const axios = require('axios');
+require('../http');
 const config = require('../config');
 
 function client() {
@@ -31,6 +32,11 @@ async function postNote(projectId, kind, iid, body) {
 
 const project = (projectId) => `/projects/${encodeURIComponent(projectId)}`;
 const noteablePath = (kind) => (kind === 'pull_request' ? 'merge_requests' : 'issues');
+
+// Marks a note as picked up with an award emoji.
+async function awardEmoji(projectId, kind, iid, noteId, name = 'eyes') {
+  await client().post(`${project(projectId)}/${noteablePath(kind)}/${iid}/notes/${noteId}/award_emoji`, { name });
+}
 
 // The newest `limit` notes on an issue or merge request, returned oldest first. System notes
 // ("added 1 commit", "changed the label") are not conversation and are dropped.
@@ -117,4 +123,4 @@ async function isProjectMember(projectId, userId) {
   }
 }
 
-module.exports = { isProjectMember, getMergeRequestDiff, postNote, listNotes, getRepoTree, getFileContent, isGroupMember, groupExists };
+module.exports = { awardEmoji, isProjectMember, getMergeRequestDiff, postNote, listNotes, getRepoTree, getFileContent, isGroupMember, groupExists };

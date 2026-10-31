@@ -85,7 +85,7 @@ test('other 400s are not mistaken for missing tool support', async (t) => {
   await assert.rejects(converse({ ...base, question: 'q', repo: repoFor() }), /status 400/);
 });
 
-test('stops calling tools after five rounds and asks for an answer', async (t) => {
+test('stops calling tools after three rounds and asks for an answer', async (t) => {
   stubGithub(t);
   let calls = 0;
   t.mock.method(openRouter, 'complete', async ({ messages }) => {
@@ -94,5 +94,5 @@ test('stops calling tools after five rounds and asks for an answer', async (t) =
     return { content: '', tool_calls: [{ id: `c${calls}`, type: 'function', function: { name: 'list_files', arguments: '{}' } }] };
   });
   assert.equal(await converse({ ...base, question: 'q', repo: repoFor() }), 'Final.');
-  assert.equal(calls, 6);
+  assert.equal(calls, 4);
 });
