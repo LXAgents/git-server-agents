@@ -107,7 +107,6 @@ the same way in `src/db.js`.
 | `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter/free`) |
 | `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
-| `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
 | `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | The **one** numeric GitHub or GitLab user ID that owns that platform (empty: no owner). A comma list stops the server at start |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
@@ -137,7 +136,7 @@ container health check.
   which would erase a SQLite file. Set `PROD=prod` and `DATABASE_URL` to the platform's managed
   PostgreSQL. To keep SQLite anyway, mount a persistent volume at `/app/prisma`.
 - **Set at least these:**
-  - `ENCRYPTION_KEY` and `ADMIN_TOKEN`.
+  - `ENCRYPTION_KEY`, `GITHUB_ADMIN_ID` and `GITLAB_ADMIN_ID`.
   - The webhook secrets. They are required when `PROD=prod`.
   - The GitHub App or GitLab credentials, including the client IDs and secrets for sign-in.
   - `PUBLIC_URL`, set to the server's public URL.
@@ -177,7 +176,7 @@ still be whitelisted, and org ownership is still checked live.
 
 ## Whitelisting and API keys
 
-Users are whitelisted only by the operator. Orgs are created only by **import**: a
+Users are whitelisted only by the platform's owner. Orgs are created only by **import**: a
 whitelisted user who owns the org on the platform imports it from the dashboard or the
 user API. Org and repository rights are never stored; they are asked of GitHub or GitLab on
 every change.
@@ -201,8 +200,7 @@ GitLab ones.
 
 | Who | How they authenticate | What they can do |
 |---|---|---|
-| Operator | `Authorization: Bearer $ADMIN_TOKEN` + `X-Platform: github\|gitlab` on `/api/admin` | Whitelist and remove users; list and delete orgs and repositories; add and delete any key, on that platform |
-| Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`, when their account's role is `owner` | The same as the operator, on their platform |
+| Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`; the one user in `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID` | Whitelist and remove users; list and delete orgs and repositories; add and delete any key, on their platform |
 | Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
 
 Users are matched by numeric user ID, never by login, because a login can be renamed and then
