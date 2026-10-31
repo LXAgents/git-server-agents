@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.12.0](1/12/0/CHANGELOG.md) | Stored logs for the owner, logged 401s, setup check at start | `CHANGELOG.md` |
 | [1.11.1](1/11/1/CHANGELOG.md) | User line in the reply footer, LXAgents reply marker | `CHANGELOG.md` |
 | [1.11.0](1/11/0/CHANGELOG.md) | Eyes on pickup, cost line, parallel answers with time limits, open login, free role | `CHANGELOG.md` |
 | [1.10.0](1/10/0/CHANGELOG.md) | Error replies with codes, PAT sign-in refused, scoped package name | `CHANGELOG.md` |

@@ -1,7 +1,7 @@
 ---
 name: webhook-refusal-logs
-description: Task record for logging refused webhooks and checking the setup at start (server 1.11.2).
-status: in-progress
+description: Task record for logging refused webhooks and checking the setup at start (server 1.12.0).
+status: done
 ---
 
 # Webhook refusal logs
@@ -20,7 +20,7 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/webhook-refusal-logs` | `.agents/` | |
-| 2 | Refusal logs and setup check | Webhook 401 logs and bodies, start-up check, README | git-server-agents | `feat/webhook-refusal-logs` | `src/controllers/webhookController.js`, `src/setupCheck.js`, `src/server.js`, `test/` | |
-| 3 | Stored logs | `Log` table, logService, owner-only `/api/admin/logs` | git-server-agents | `feat/webhook-refusal-logs` | `prisma/`, `src/services/logService.js`, `src/controllers/logController.js` | |
-| 4 | Release | Version, changelog | git-server-agents | `release/1.11.2` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/webhook-refusal-logs` | `.agents/` | #59 |
+| 2 | Refusal logs and setup check | Webhook 401 logs and bodies, start-up check, README | git-server-agents | `feat/webhook-refusal-logs` | `src/controllers/webhookController.js`, `src/setupCheck.js`, `src/server.js`, `test/` | #60 |
+| 3 | Stored logs | `Log` table, logService, owner-only `/api/admin/logs` | git-server-agents | `feat/webhook-refusal-logs` | `prisma/`, `src/services/logService.js`, `src/controllers/logController.js` | #60 |
+| 4 | Release | Version, changelog | git-server-agents | `release/1.12.0` | `package.json`, `wiki/logs/` | #61 |
