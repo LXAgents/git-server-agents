@@ -12,6 +12,12 @@ Every dependency moved to its latest stable release. No API or schema change.
 - `npm run db:push` also generates the client, which Prisma 7 no longer does on push.
 - Node.js 22.12 or later is required.
 
+## Fixed
+
+- `npm test` runs the test files one at a time. With Prisma 7's SQLite adapter, two test
+  files writing to `prisma/dev.db` at once could fail with "Operation has timed out", because
+  SQLite refuses a busy lock upgrade straight away instead of waiting.
+
 ## CI
 
 - Node 26 LTS, `actions/checkout` v7, `actions/setup-node` v7 and PostgreSQL 18.
