@@ -59,3 +59,14 @@ status: in-progress
 - Behaviour change: the 1.0.0 fallback to the org owner's personal keys is gone.
 - Tests: ordering, inactive and unreadable rows, fallback on 401/402/429/5xx and network
   errors, last-error rethrow, no fallback on 400. 34 tests pass on SQLite.
+
+### Task 4 — feat/platform-auth
+
+- `src/services/platformService.js` calls GitHub/GitLab with the user's own token:
+  `getUser`, `listOwnedOrgs` (GitHub memberships with role `admin`; GitLab top-level
+  groups at access level 50; plus the personal namespace), `isOwner` (live, per call),
+  and `findGithubInstallation` (App JWT, `/orgs|users/:name/installation`).
+- `src/middleware/userAuth.js`: `X-Platform` + `Authorization: Bearer <token>` → platform
+  user → whitelisted `Account`, else 400/401/403. The token is used per request, never stored.
+- `src/errors.js` `HttpError` for client-safe errors; the app only logs 5xx now.
+- `test/helpers/mockPlatform.js` fakes both APIs; 40 tests pass.
