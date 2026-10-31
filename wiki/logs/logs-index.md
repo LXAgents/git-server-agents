@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.4.0](1/4/0/CHANGELOG.md) | Chat history, repository file tools, model required, org keys for members only | `CHANGELOG.md` |
 | [1.3.0](1/3/0/CHANGELOG.md) | OAuth sign-in, client ID naming, admin user IDs | `CHANGELOG.md` |
 | [1.2.0](1/2/0/CHANGELOG.md) | Docker image for online platforms | `CHANGELOG.md` |
 | [1.1.2](1/1/2/CHANGELOG.md) | Clean npm install: libsql adapter, node --watch, approved scripts | `CHANGELOG.md` |
