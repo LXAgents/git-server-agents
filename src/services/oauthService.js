@@ -5,8 +5,10 @@ const crypto = require('crypto');
 const axios = require('axios');
 const config = require('../config');
 const { HttpError } = require('../errors');
+const { encrypt, decrypt } = require('./cryptoService');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+const CODE_TTL_MS = 60 * 1000;
 
 const PROVIDERS = {
   github: {
@@ -120,4 +122,42 @@ async function exchangeCode(platform, { code, redirectUri }) {
   return data.access_token;
 }
 
-module.exports = { providers, requireEnabled, checkRedirect, signState, verifyState, authorizeUrl, exchangeCode };
+// The token goes back to the dashboard as a sealed one-time code instead of in the URL: the
+// platform and token, AES-256-GCM under ENCRYPTION_KEY, valid for a minute. The dashboard
+// swaps it for the token with POST /api/auth/exchange.
+const usedCodes = new Map();
+
+function sealToken({ platform, token }, now = Date.now()) {
+  if (!config.encryptionKey) throw new HttpError(503, 'ENCRYPTION_KEY is required for sign-in');
+  const sealed = encrypt(JSON.stringify({ platform, token, exp: now + CODE_TTL_MS }));
+  return Buffer.from(sealed, 'utf8').toString('base64url');
+}
+
+function openCode(code, now = Date.now()) {
+  for (const [key, exp] of usedCodes) if (exp < now) usedCodes.delete(key);
+  const text = String(code || '');
+  let data;
+  try {
+    data = JSON.parse(decrypt(Buffer.from(text, 'base64url').toString('utf8')));
+  } catch {
+    throw new HttpError(400, 'invalid sign-in code');
+  }
+  if (typeof data.exp !== 'number' || data.exp < now) throw new HttpError(400, 'sign-in code expired, try again');
+  if (!PROVIDERS[data.platform] || typeof data.token !== 'string' || !data.token) throw new HttpError(400, 'invalid sign-in code');
+  const key = crypto.createHash('sha256').update(text).digest('base64url');
+  if (usedCodes.has(key)) throw new HttpError(400, 'sign-in code already used');
+  usedCodes.set(key, data.exp);
+  return { platform: data.platform, token: data.token };
+}
+
+module.exports = {
+  providers,
+  requireEnabled,
+  checkRedirect,
+  signState,
+  verifyState,
+  authorizeUrl,
+  exchangeCode,
+  sealToken,
+  openCode,
+};
