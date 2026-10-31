@@ -1,7 +1,7 @@
 ---
 name: models-and-tokens
 description: Task record for per-user, org and repo models and OpenRouter keys, and the @agents trigger (1.6.0).
-status: in-progress
+status: done
 ---
 
 # Models and tokens per user, org and repo

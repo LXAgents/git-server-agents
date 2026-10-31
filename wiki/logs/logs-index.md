@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.6.0](1/6/0/CHANGELOG.md) | Models and keys per user, org and repository; @agents | `CHANGELOG.md` |
 | [1.5.0](1/5/0/CHANGELOG.md) | OAuth token out of the URL: sealed one-time code and /api/auth/exchange | `CHANGELOG.md` |
 | [1.4.2](1/4/2/CHANGELOG.md) | Log injection fix: request values stay on one log line | `CHANGELOG.md` |
 | [1.4.1](1/4/1/CHANGELOG.md) | SonarCloud fixes: linear regexes, no install scripts, explicit Docker copy | `CHANGELOG.md` |
