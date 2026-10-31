@@ -3,6 +3,7 @@ const { verifyGithubSignature, verifyGitlabToken } = require('../services/signat
 const { githubIdentity, gitlabIdentity } = require('../services/identityService');
 const whitelist = require('../services/whitelistService');
 const tasks = require('../services/taskService');
+const { logSafe } = require('../utils/strings');
 
 // Without a secret anyone could forge a whitelisted sender, so production refuses to run
 // unsigned. Development allows it so the endpoints can be exercised with curl.
@@ -15,7 +16,7 @@ function checkAuthenticity(authentic, secret) {
 async function accept(res, platform, event, identity, payload) {
   const result = await whitelist.verify(platform, identity);
   if (!result.allowed) {
-    console.warn(`[webhook:${platform}] 403 ${event}: ${result.reason}`);
+    console.warn(`[webhook:${platform}] 403 ${logSafe(event)}: ${logSafe(result.reason)}`);
     // The reason stays in the server log; telling the caller which check failed helps probing.
     return res.status(403).json({ error: 'Unauthorized' });
   }

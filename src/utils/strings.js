@@ -7,4 +7,17 @@ function trimTrailingSlashes(value) {
   return text.slice(0, end);
 }
 
-module.exports = { trimTrailingSlashes };
+// Makes a value from a request safe for one log line: control characters (CR, LF, tabs, ANSI
+// escapes) become spaces and the value is capped, so it can't forge or flood log entries.
+const MAX_LOG_VALUE = 200;
+function logSafe(value) {
+  let text = '';
+  for (const ch of String(value)) {
+    const code = ch.codePointAt(0);
+    text += code < 0x20 || (code >= 0x7f && code < 0xa0) || code === 0x2028 || code === 0x2029 ? ' ' : ch;
+    if (text.length >= MAX_LOG_VALUE) return `${text.slice(0, MAX_LOG_VALUE)}…`;
+  }
+  return text;
+}
+
+module.exports = { trimTrailingSlashes, logSafe };
