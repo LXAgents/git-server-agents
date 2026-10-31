@@ -43,6 +43,18 @@ async function runOnce(limit = 10) {
   return pending.length;
 }
 
+// A task left in "processing" by a restart or redeploy would never finish. One that has been
+// there longer than any answer can take (6 model calls of 120 s per key) goes back to pending.
+const STALE_MS = 30 * 60_000;
+async function requeueStale(now = Date.now()) {
+  const { count } = await prisma.agentTask.updateMany({
+    where: { status: 'processing', updatedAt: { lt: new Date(now - STALE_MS) } },
+    data: { status: 'pending' },
+  });
+  if (count) console.warn(`[worker] re-queued ${count} task(s) stuck in processing`);
+  return count;
+}
+
 function start({ pollMs = config.worker.pollMs } = {}) {
   let timer = null;
   let stopped = false;
@@ -62,14 +74,18 @@ function start({ pollMs = config.worker.pollMs } = {}) {
   };
 
   console.log(`[worker] polling every ${pollMs}ms`);
-  void tick();
+  requeueStale()
+    .catch((err) => console.error('[worker] could not re-queue stale tasks:', err.message))
+    .finally(() => {
+      if (!stopped) void tick();
+    });
   return () => {
     stopped = true;
     clearTimeout(timer);
   };
 }
 
-module.exports = { start, runOnce };
+module.exports = { start, runOnce, requeueStale };
 
 if (require.main === module) {
   const stop = start();
