@@ -106,4 +106,15 @@ async function groupExists(group) {
   }
 }
 
-module.exports = { getMergeRequestDiff, postNote, listNotes, getRepoTree, getFileContent, isGroupMember, groupExists };
+// Whether the user is a member of the project (any access level, inherited included).
+async function isProjectMember(projectId, userId) {
+  try {
+    const { data } = await client().get(`${project(projectId)}/members/all/${encodeURIComponent(userId)}`);
+    return Boolean(data && String(data.id) === String(userId)) && data.state !== 'blocked';
+  } catch (err) {
+    if (err.response && err.response.status === 404) return false;
+    throw err;
+  }
+}
+
+module.exports = { isProjectMember, getMergeRequestDiff, postNote, listNotes, getRepoTree, getFileContent, isGroupMember, groupExists };

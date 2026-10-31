@@ -3,6 +3,8 @@ const { githubIdentity, gitlabIdentity } = require('./identityService');
 const whitelist = require('./whitelistService');
 const { toComment, REPLY_MARKER } = require('./eventService');
 const { parseComment, stripTrigger } = require('./commentParser');
+const models = require('./modelService');
+const repoStore = require('./repoStore');
 const github = require('./githubService');
 const gitlab = require('./gitlabService');
 const keys = require('./keyService');
@@ -169,6 +171,19 @@ async function isOrgMember(platform, identity, payload, token) {
   }
 }
 
+// Repo keys are spent only for people in the repo: a collaborator (GitHub), a project member
+// (GitLab), or a member of its org. Any failure to confirm counts as "no".
+async function isRepoMember(platform, identity, comment, orgMember, token) {
+  if (orgMember) return true;
+  try {
+    if (platform === 'github') return await github.isCollaborator(comment.repo, identity.triggerUser, token);
+    return await gitlab.isProjectMember(comment.projectId, identity.triggerUserId);
+  } catch (err) {
+    console.warn(`[agent] could not confirm ${logSafe(identity.triggerUser)} in the repository: ${logSafe(err.message)}`);
+    return false;
+  }
+}
+
 // The commit files are read at: the PR/MR head, or the default branch for an issue.
 async function resolveRef(platform, comment, token) {
   if (comment.headSha) return comment.headSha;
@@ -192,7 +207,6 @@ async function processTask(task) {
     console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model, followed by a question`);
     return 'skipped';
   }
-  const model = parsed.model || config.ai.defaultModel;
 
   // Check the whitelist again: access may have been revoked while the task was queued.
   const identity = task.platform === 'github' ? githubIdentity(payload) : gitlabIdentity(payload);
@@ -213,15 +227,21 @@ async function processTask(task) {
     history = await gitlab.listNotes(comment.projectId, comment.kind, comment.number);
   }
 
+  const account = { type: task.platform, id: identity.triggerUserId };
+  const repository = await repoStore.findForEvent(task.platform, payload, access.installation);
+  const model = parsed.model || (await models.resolveModel({ repository, installation: access.installation, account })).model;
+
   const member = await isOrgMember(task.platform, identity, payload, token);
+  const repoMember = repository ? await isRepoMember(task.platform, identity, comment, member, token) : false;
   const { provider, keys: candidates } = await keys.getProviderKeys(
     config.ai.providerName,
-    { type: task.platform, id: identity.triggerUserId },
-    member ? access.installation : null
+    account,
+    member ? access.installation : null,
+    repoMember ? repository : null
   );
   if (candidates.length === 0) {
-    const orgNote = member ? `or org ${identity.targetOrg}` : `(org keys need membership of ${identity.targetOrg})`;
-    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId} ${orgNote}`);
+    const orgNote = member ? `, repo or org ${identity.targetOrg}` : ` (repo and org keys need membership of ${identity.targetOrg})`;
+    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId}${orgNote}`);
   }
 
   const ref = await resolveRef(task.platform, comment, token);
@@ -249,4 +269,4 @@ async function processTask(task) {
   return 'success';
 }
 
-module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember };
+module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };
