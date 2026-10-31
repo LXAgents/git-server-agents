@@ -1,7 +1,7 @@
 ---
 name: latest-dependencies
 description: Task record for moving git-server-agents to the latest dependencies (1.1.1).
-status: in-progress
+status: done
 ---
 
 # Latest dependencies
@@ -21,6 +21,6 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/latest-dependencies` | `.agents/` | |
-| 2 | Upgrade | Prisma 7, adapters, CI versions, lockfile | git-server-agents | `build/latest-deps` | `package*.json`, `prisma/`, `src/db.js`, CI | |
-| 3 | Release | 1.1.1 changelog and version | git-server-agents | `release/1.1.1` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/latest-dependencies` | `.agents/` | #14 |
+| 2 | Upgrade | Prisma 7, adapters, CI versions, lockfile | git-server-agents | `build/latest-deps` | `package*.json`, `prisma/`, `src/db.js`, CI | #15 |
+| 3 | Release | 1.1.1 changelog and version | git-server-agents | `release/1.1.1` | `wiki/logs/`, `package.json` | #16 |
