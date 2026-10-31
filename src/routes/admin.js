@@ -1,6 +1,7 @@
 const express = require('express');
 const { adminAuth } = require('../middleware/adminAuth');
 const admin = require('../controllers/adminController');
+const logs = require('../controllers/logController');
 
 const router = express.Router();
 
@@ -20,5 +21,8 @@ router.delete('/repos/:id', admin.deleteRepo);
 router.get('/keys', admin.listKeys);
 router.post('/keys', admin.createKey);
 router.delete('/keys/:id', admin.deleteKey);
+
+// Owner only, like every route here.
+router.get('/logs', logs.listLogs);
 
 module.exports = router;

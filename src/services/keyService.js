@@ -1,5 +1,6 @@
 const prisma = require('../db');
 const { decrypt } = require('./cryptoService');
+const log = require('./logService');
 
 const byPriority = [{ priority: 'desc' }, { createdAt: 'asc' }];
 
@@ -10,7 +11,7 @@ function decryptAll(rows, owner) {
       keys.push({ id: row.id, owner, priority: row.priority, apiKey: decrypt(row.apiKeyEncrypted) });
     } catch (err) {
       // One unreadable row (e.g. stored under an old ENCRYPTION_KEY) should not hide the rest.
-      console.warn(`[keys] skipping key ${row.id}: ${err.message}`);
+      log.warn('keys', `skipping key ${row.id}: ${err.message}`);
     }
   }
   return keys;

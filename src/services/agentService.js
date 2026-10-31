@@ -12,6 +12,7 @@ const openRouter = require('./openRouterService');
 const { AgentError, formatReply } = require('./agentErrors');
 const { TOOLS, createRepoTools } = require('./repoTools');
 const { logSafe } = require('../utils/strings');
+const log = require('./logService');
 
 const MAX_HISTORY_CHARS = 30_000;
 const MAX_TOOL_ROUNDS = 3;
@@ -85,7 +86,7 @@ function isKeySpecific(err) {
 
 // Runs `attempt(key)` with each key in order until one succeeds. The error thrown at the end
 // lists every attempt (owner and status, never the key) as `attempts`.
-async function chatWithFallback(candidates, attempt) {
+async function chatWithFallback(candidates, attempt, logMeta) {
   let lastError;
   const attempts = [];
   for (const [index, key] of candidates.entries()) {
@@ -98,7 +99,7 @@ async function chatWithFallback(candidates, attempt) {
       err.attempts = attempts;
       if (!isKeySpecific(err) || err.deadline) throw err;
       if (index < candidates.length - 1) {
-        console.warn(`[agent] ${key.owner} key ${key.id} failed (${status}), falling back to next...`);
+        log.warn('agent', `${key.owner} key ${key.id} failed (${status}), falling back to next...`, logMeta);
       }
     }
   }
@@ -144,18 +145,18 @@ function deadlineError(limitMs) {
 
 // One model call, cut short by the answer's deadline, and logged with its duration.
 async function timedCall(request, apiKey, messages, tools) {
-  const { deadline, limitMs, label = '' } = request;
+  const { deadline, limitMs, label = '', logMeta } = request;
   const remaining = deadline ? deadline - Date.now() : config.ai.modelTimeoutMs;
   if (remaining <= 0) throw deadlineError(limitMs);
   const started = Date.now();
-  const { deadline: _d, limitMs: _l, label: _n, spend, ...body } = request;
+  const { deadline: _d, limitMs: _l, label: _n, logMeta: _m, spend, ...body } = request;
   try {
     const reply = await openRouter.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
     if (spend) addCost(spend, reply.cost);
-    console.log(`[agent] ${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`);
+    log.info('agent', `${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`, logMeta);
     return reply;
   } catch (err) {
-    console.warn(`[agent] ${label}${logSafe(request.model)} failed in ${Date.now() - started}ms: ${logSafe(err.message)}`);
+    log.warn('agent', `${label}${logSafe(request.model)} failed in ${Date.now() - started}ms: ${logSafe(err.message)}`, logMeta);
     if (deadline && Date.now() >= deadline && !err.response) throw deadlineError(limitMs);
     throw err;
   }
@@ -187,7 +188,7 @@ async function converse({ request, apiKey, system, history, question, repo }) {
       }
     } catch (err) {
       if (!toolsUnsupported(err)) throw err;
-      console.warn(`[agent] ${logSafe(request.model)} does not support tools; adding repository context to the prompt instead`);
+      log.warn('agent', `${logSafe(request.model)} does not support tools; adding repository context to the prompt instead`, request.logMeta);
       const context = await repo.inlineContext(question);
       const plain = [
         { role: 'system', content: `${system}\n\n${context}` },
@@ -218,7 +219,7 @@ async function isOrgMember(platform, identity, payload, token) {
     // A personal namespace: only its owner counts.
     return String(identity.targetOrg).toLowerCase() === String(identity.triggerUser || '').toLowerCase();
   } catch (err) {
-    console.warn(`[agent] could not confirm ${logSafe(identity.triggerUser)} in ${logSafe(identity.targetOrg)}: ${logSafe(err.message)}`);
+    log.warn('agent', `could not confirm ${logSafe(identity.triggerUser)} in ${logSafe(identity.targetOrg)}: ${logSafe(err.message)}`, { platform });
     return false;
   }
 }
@@ -231,7 +232,7 @@ async function isRepoMember(platform, identity, comment, orgMember, token) {
     if (platform === 'github') return await github.isCollaborator(comment.repo, identity.triggerUser, token);
     return await gitlab.isProjectMember(comment.projectId, identity.triggerUserId);
   } catch (err) {
-    console.warn(`[agent] could not confirm ${logSafe(identity.triggerUser)} in the repository: ${logSafe(err.message)}`);
+    log.warn('agent', `could not confirm ${logSafe(identity.triggerUser)} in the repository: ${logSafe(err.message)}`, { platform });
     return false;
   }
 }
@@ -265,7 +266,7 @@ async function replyWithError(task, comment, ctx, err) {
     const body = `${formatReply(err, { model: ctx.model, taskId: task.id })}\n${REPLY_MARKER}\n${ERROR_MARKER}`;
     await postReply(task.platform, comment, body, token);
   } catch (postErr) {
-    console.error(`[agent] task ${task.id}: could not post the error reply: ${logSafe(postErr.message)}`);
+    log.error('agent', `task ${task.id}: could not post the error reply: ${logSafe(postErr.message)}`, { platform: task.platform, taskId: task.id });
   }
 }
 
@@ -275,7 +276,7 @@ async function acknowledge(task, comment, token) {
     if (task.platform === 'github') await github.addReaction(comment.repo, comment.commentId, { review: Boolean(comment.review) }, token);
     else await gitlab.awardEmoji(comment.projectId, comment.kind, comment.number, comment.commentId);
   } catch (err) {
-    console.warn(`[agent] task ${task.id}: could not add the eyes reaction: ${logSafe(err.message)}`);
+    log.warn('agent', `task ${task.id}: could not add the eyes reaction: ${logSafe(err.message)}`, { platform: task.platform, taskId: task.id });
   }
 }
 
@@ -332,9 +333,10 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     deadline: ctx.started + config.ai.taskTimeoutMs,
     limitMs: config.ai.taskTimeoutMs,
     label: `task ${task.id}: `,
+    logMeta: { platform: task.platform, taskId: task.id },
     spend: { cost: 0, complete: true },
   };
-  console.log(`[agent] task ${task.id}: asking ${logSafe(model)} with ${candidates.length} key(s)`);
+  log.info('agent', `task ${task.id}: asking ${logSafe(model)} with ${candidates.length} key(s)`, request.logMeta);
   const answer = await chatWithFallback(candidates, (key) =>
     converse({
       request,
@@ -343,7 +345,8 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
       history: buildHistory(history, comment.commentId),
       question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
       repo,
-    })
+    }),
+    request.logMeta
   );
 
   // The login is in a code span, so GitHub and GitLab don't link or notify the user.
@@ -367,7 +370,7 @@ async function processTask(task) {
   // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
   const parsed = parseComment(comment.commentBody);
   if (!(parsed.auto || parsed.model)) {
-    console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model`);
+    log.info('agent', `task ${task.id} skipped: line 1 must start with @agents or @vendor/model`, { platform: task.platform, taskId: task.id });
     return 'skipped';
   }
 

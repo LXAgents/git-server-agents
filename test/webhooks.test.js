@@ -79,9 +79,10 @@ test('queues a signed trigger comment in an imported org', async () => {
   assert.equal(JSON.parse(task.payload).organization.login, ORG);
 });
 
-test('rejects a bad signature with 401', async () => {
+test('rejects a bad signature with 401 and says which setting to fix', async () => {
   const res = await postGithub(triggerComment(USER_ID, ORG), { signature: 'sha256=00' });
   assert.equal(res.status, 401);
+  assert.match((await res.json()).error, /X-Hub-Signature-256 does not match GITHUB_WEBHOOK_SECRET/);
 });
 
 test('anyone may trigger in an imported org: no account is needed to be queued', async () => {
@@ -124,4 +125,29 @@ test('rejects a GitLab hook with the wrong token', async () => {
     body: JSON.stringify({ object_kind: 'note' }),
   });
   assert.equal(res.status, 401);
+  assert.match((await res.json()).error, /X-Gitlab-Token does not match GITLAB_WEBHOOK_SECRET/);
+});
+
+test('rejects a GitLab hook with no token, saying none was sent', async () => {
+  const res = await fetch(`${baseUrl}/api/webhooks/gitlab`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ object_kind: 'note' }),
+  });
+  assert.equal(res.status, 401);
+  assert.match((await res.json()).error, /no X-Gitlab-Token header/);
+});
+
+test('under PROD=prod with no secret set, refuses with 401 and names the missing setting', async () => {
+  const config = require('../src/config');
+  const saved = [config.isProd, config.github.webhookSecret];
+  config.isProd = true;
+  config.github.webhookSecret = '';
+  try {
+    const res = await postGithub(triggerComment(USER_ID, ORG));
+    assert.equal(res.status, 401);
+    assert.match((await res.json()).error, /GITHUB_WEBHOOK_SECRET is not set on the server/);
+  } finally {
+    [config.isProd, config.github.webhookSecret] = saved;
+  }
 });
