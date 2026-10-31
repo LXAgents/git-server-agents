@@ -3,9 +3,17 @@ const profiles = require('../services/profileService');
 const owners = require('../services/ownerService');
 const { HttpError } = require('../errors');
 
-// Who the caller is on the platform, from their own token:
+// Personal access tokens never expire and carry whatever scopes their owner gave them, so only
+// the OAuth sign-in ("Continue with GitHub/GitLab") is accepted. These are the PAT prefixes
+// GitHub (classic and fine-grained) and GitLab put on every token.
+const PAT_PREFIXES = ['ghp_', 'github_pat_', 'glpat-'];
+function isPersonalAccessToken(token) {
+  return PAT_PREFIXES.some((prefix) => token.startsWith(prefix));
+}
+
+// Who the caller is on the platform, from their own OAuth token:
 //   X-Platform: github | gitlab
-//   Authorization: Bearer <OAuth or personal access token>
+//   Authorization: Bearer <token from Continue with GitHub/GitLab>
 async function platformCaller(req) {
   const platform = String(req.get('x-platform') || '').toLowerCase();
   if (!platforms.PLATFORMS.includes(platform)) throw new HttpError(400, 'X-Platform must be github or gitlab');
@@ -13,6 +21,9 @@ async function platformCaller(req) {
   const match = /^Bearer\s+(\S+)$/i.exec(String(req.get('authorization') || '').trim());
   if (!match) throw new HttpError(401, 'missing bearer token');
   const token = match[1].trim();
+  if (isPersonalAccessToken(token)) {
+    throw new HttpError(401, 'personal access tokens are not accepted: sign in with GitHub or GitLab');
+  }
   const user = await platforms.getUser(platform, token);
   profiles.remember(platform, user.id, user);
   return { ...user, token };
@@ -38,4 +49,4 @@ async function userAuth(req, _res, next) {
   }
 }
 
-module.exports = { userAuth, platformCaller, findAccount };
+module.exports = { userAuth, platformCaller, findAccount, isPersonalAccessToken };

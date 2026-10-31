@@ -139,3 +139,11 @@ test('checks GitLab group ownership the same way', async () => {
   assert.equal((await call('DELETE', `/orgs/${org.id}`, { token: 'gh-alice' })).status, 404);
   assert.equal((await call('DELETE', `/orgs/${org.id}`, { token: 'gl-carol', platform: 'gitlab' })).status, 204);
 });
+
+test('personal access tokens are refused; only the OAuth sign-in is accepted', async () => {
+  for (const [platform, token] of [['github', 'ghp_abc123'], ['github', 'github_pat_11ABC'], ['gitlab', 'glpat-xyz']]) {
+    const res = await call('GET', '/me', { token, platform });
+    assert.equal(res.status, 401);
+    assert.match((await res.json()).error, /personal access tokens are not accepted/);
+  }
+});
