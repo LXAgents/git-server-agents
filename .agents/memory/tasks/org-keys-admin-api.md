@@ -70,3 +70,14 @@ status: in-progress
   user → whitelisted `Account`, else 400/401/403. The token is used per request, never stored.
 - `src/errors.js` `HttpError` for client-safe errors; the app only logs 5xx now.
 - `test/helpers/mockPlatform.js` fakes both APIs; 40 tests pass.
+
+### Task 5 — feat/admin-api
+
+- `src/routes/admin.js` at `/api/admin`, behind `src/middleware/adminAuth.js` (constant-time
+  compare against `ADMIN_TOKEN`, bare or `Bearer`; unset means closed; else 401).
+- Accounts `GET/POST/DELETE`, orgs `GET/DELETE` (no POST: import only), keys
+  `GET/POST/DELETE` with `target: user|org`. Key views carry `last4`, never the key.
+- `src/services/keyStore.js` shared key create/list/delete; `src/middleware/cors.js` with
+  `CORS_ORIGINS` (default `http://localhost:5173`); Prisma P2025/P2002/P2003 map to
+  404/409/400 in the app error handler.
+- 45 tests pass on SQLite.
