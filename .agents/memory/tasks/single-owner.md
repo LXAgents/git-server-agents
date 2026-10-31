@@ -1,7 +1,7 @@
 ---
 name: single-owner
 description: Task record for allowing exactly one owner per platform (1.8.0).
-status: in-progress
+status: done
 ---
 
 # One owner per platform
@@ -20,6 +20,6 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/single-owner` | `.agents/` | |
-| 2 | Single owner | Config check, owner sync, create refusal, tests, docs | git-server-agents | `feat/single-owner` | `src/`, `test/`, `README.md` | |
-| 3 | Release | 1.8.0 changelog and version | git-server-agents | `release/1.8.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/single-owner` | `.agents/` | #44 |
+| 2 | Single owner | Config check, owner sync, create refusal, tests, docs | git-server-agents | `feat/single-owner` | `src/`, `test/`, `README.md` | #45 |
+| 3 | Release | 1.8.0 changelog and version | git-server-agents | `release/1.8.0` | `wiki/logs/`, `package.json` | #46 |
