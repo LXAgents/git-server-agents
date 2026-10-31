@@ -1,9 +1,15 @@
 # git-server-agents
 
 A zero-trust webhook server and AI agent for GitHub and GitLab apps. Whitelisted users
-comment on a pull request, merge request or issue; the server queues the event, a
-background worker sends the diff and the comment to an OpenRouter model, and the answer is
-posted back as a reply. Repositories are never cloned: diffs come from the REST APIs.
+comment on a pull request, merge request or issue. The server queues the event, and a
+background worker sends the comment to an OpenRouter model, together with:
+
+- the diff,
+- the earlier conversation,
+- any repository files the model asks for.
+
+The answer is posted back as a reply. Repositories are never cloned: diffs, comments and files
+all come from the REST APIs.
 
 ## How a webhook is handled
 
@@ -13,21 +19,49 @@ posted back as a reply. Repositories are never cloned: diffs come from the REST 
    Either missing: **403**. The apps are public, so nothing is trusted that was not added
    by hand.
 3. The payload is stored as a `pending` `AgentTask` and the request returns **200** at once.
-4. The worker claims the task, re-checks the whitelist, fetches the diff, calls OpenRouter
-   and posts the reply. The task ends as `success`, `skipped` or `failed` (see `errorLog`).
+4. The worker claims the task and skips it unless line 1 names a model (see below). It
+   re-checks the whitelist, then fetches the diff (PRs and MRs only) and the last 30 comments.
+   It calls OpenRouter and posts the reply. The task ends as `success`, `skipped` or `failed`
+   (see `errorLog`).
 
-## Choosing a model
+## Asking the agent
 
-If line 1 of the comment is `@vendor/model`, that OpenRouter model is used and the rest of
-the comment is the prompt:
+Line 1 of the comment must be `@vendor/model`. That OpenRouter model answers, and the rest of
+the comment is the question:
 
 ```
-@nvidia/nemotron-3.5-super-vl:free
-Is this migration safe to run twice?
+@openrouter/free
+What files do I have under src/services, and what does agentService.js do?
 ```
 
-Otherwise the whole comment is the prompt and `DEFAULT_MODEL` is used. A first line
-without a `/`, such as `@alice`, is treated as a normal mention.
+A comment without a model line gets no answer, and neither does one whose first line is a
+user mention such as `@alice`. `DEFAULT_MODEL` is only the suggestion shown in the log when a
+comment is skipped.
+
+- **Conversation:** the last 30 comments on the issue, PR or MR are sent as chat history.
+  The agent's own replies count as `assistant`, everyone else as `user` with their `@login`.
+  So follow-up questions work.
+- **Repository files:** the model gets two tools, `list_files` and `read_file`. They read
+  through the GitHub or GitLab API at the PR or MR head commit, or at the default branch for an
+  issue.
+  - Files are cut at 40,000 characters and the list at 2,000 paths.
+  - If the model doesn't support tools, the agent asks again without them. That second request
+    includes the file list and any files the question names.
+- **Org keys need org membership.** The triggering user's own keys are always tried first. The
+  org's keys are added only when the platform confirms the user is a member of that org:
+  - On GitHub, through the App's "Members: read" permission.
+  - On GitLab, through the bot token.
+  - On a personal account, the user must be its owner.
+
+  If membership can't be confirmed, only the user's own keys are used.
+
+The GitHub App needs these repository permissions:
+
+- **Contents: read**, for files.
+- **Issues: read and write** and **Pull requests: read and write**, for comments and diffs.
+- **Members: read**, an organization permission.
+
+The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes).
 
 ## Setup
 
@@ -59,7 +93,7 @@ the same way in `src/db.js`.
 | `GITHUB_URL`, `GITLAB_URL` | Web addresses for OAuth (default `https://github.com`, and `GITLAB_API_URL` without `/api/v4`). Change them only for GitHub Enterprise or self-managed GitLab |
 | `PUBLIC_URL` | This server's public address, used for the OAuth callback URL. Set it behind a proxy or on a platform |
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
-| `DEFAULT_MODEL` | Model when the comment names none (default `openrouter/auto`) |
+| `DEFAULT_MODEL` | Suggested model shown in the log when a comment names none (default `openrouter/free`). Comments must name their model |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
 | `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that get admin control when they sign in |

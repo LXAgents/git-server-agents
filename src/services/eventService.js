@@ -10,8 +10,12 @@ function githubComment(event, body) {
   const base = {
     platform: 'github',
     repo: body.repository.full_name,
+    commentId: body.comment.id,
     commentBody: body.comment.body || '',
+    author: (body.comment.user && body.comment.user.login) || '',
     isBot: (body.comment.user && body.comment.user.type === 'Bot') || false,
+    // Files are read at the PR head when known, otherwise at the default branch.
+    defaultBranch: body.repository.default_branch || null,
   };
   if (event === 'issue_comment' && body.issue) {
     const pullUrl = body.issue.pull_request && body.issue.pull_request.url;
@@ -30,6 +34,7 @@ function githubComment(event, body) {
       kind: 'pull_request',
       number: body.pull_request.number,
       pullUrl: body.pull_request.url,
+      headSha: (body.pull_request.head && body.pull_request.head.sha) || null,
       title: body.pull_request.title || '',
       description: body.pull_request.body || '',
     };
@@ -44,14 +49,18 @@ function gitlabComment(event, body) {
   const base = {
     platform: 'gitlab',
     projectId: body.project.id,
+    commentId: attrs.id,
     commentBody: attrs.note || '',
+    author: (body.user && body.user.username) || '',
     isBot: (body.user && body.user.bot) || false,
+    defaultBranch: body.project.default_branch || null,
   };
   if (attrs.noteable_type === 'MergeRequest' && body.merge_request) {
     return {
       ...base,
       kind: 'pull_request',
       number: body.merge_request.iid,
+      headSha: (body.merge_request.last_commit && body.merge_request.last_commit.id) || null,
       title: body.merge_request.title || '',
       description: body.merge_request.description || '',
     };
