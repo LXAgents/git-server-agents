@@ -1,9 +1,13 @@
-// Operator endpoints. Whitelisting users happens only here; orgs are never created here,
-// because they come in by import (see userController).
+// Owner and operator endpoints. Whitelisting users happens only here; orgs are never created
+// here, because they come in by import (see userController).
+// Every endpoint works on the session's platform only (req.admin.platform, see adminAuth):
+// rows from the other platform are neither listed nor changed.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
+const profiles = require('../services/profileService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
+const { ROLES, MEMBER } = require('../services/roles');
 const { HttpError } = require('../errors');
 
 function platformParam(value) {
@@ -16,86 +20,127 @@ function requiredString(value, name) {
   return String(value).trim();
 }
 
-async function listAccounts(_req, res) {
-  const rows = await prisma.account.findMany({
-    include: { _count: { select: { keys: true, installations: true } } },
-    orderBy: [{ type: 'asc' }, { createdAt: 'asc' }],
-  });
-  res.json(
-    rows.map((a) => ({
-      platform: a.type,
-      id: a.id,
-      username: a.username,
-      keyCount: a._count.keys,
-      orgCount: a._count.installations,
-      createdAt: a.createdAt,
-    }))
-  );
+function roleParam(value) {
+  if (value === undefined || value === null || value === '') return MEMBER;
+  const role = String(value).trim().toLowerCase();
+  if (!ROLES.includes(role)) throw new HttpError(400, `role must be one of ${ROLES.join(', ')}`);
+  return role;
 }
 
-async function createAccount(req, res) {
-  const { platform, userId, username } = req.body || {};
-  const account = await prisma.account.create({
-    data: {
-      type: platformParam(platform),
-      id: requiredString(userId, 'userId'),
-      username: username ? String(username).trim() : null,
-    },
+function accountView(a, profile) {
+  return {
+    platform: a.type,
+    id: a.id,
+    ...profiles.describe(a.id, profile),
+    role: a.role,
+    keyCount: a._count ? a._count.keys : undefined,
+    orgCount: a._count ? a._count.installations : undefined,
+    createdAt: a.createdAt,
+  };
+}
+
+async function listAccounts(req, res) {
+  const { platform, token } = req.admin;
+  const rows = await prisma.account.findMany({
+    where: { type: platform },
+    include: { _count: { select: { keys: true, installations: true } } },
+    orderBy: { createdAt: 'asc' },
   });
-  res.status(201).json({ platform: account.type, id: account.id, username: account.username, createdAt: account.createdAt });
+  const found = await profiles.getProfiles(platform, rows.map((a) => a.id), token);
+  res.json(rows.map((a) => accountView(a, found.get(a.id))));
+}
+
+// Whitelists a user of the session's platform by numeric ID. Their login, name and avatar
+// are read from the platform, never stored.
+async function createAccount(req, res) {
+  const { platform, token } = req.admin;
+  const { userId, role } = req.body || {};
+  const account = await prisma.account.create({
+    data: { type: platform, id: requiredString(userId, 'userId'), role: roleParam(role) },
+  });
+  res.status(201).json(accountView(account, await profiles.getProfile(platform, account.id, token)));
 }
 
 // Cascades to the orgs this account owns and to their keys.
 async function deleteAccount(req, res) {
-  await prisma.account.delete({ where: { type_id: { type: platformParam(req.params.platform), id: req.params.userId } } });
+  const platform = platformParam(req.params.platform);
+  if (platform !== req.admin.platform) throw new HttpError(404, 'account not found');
+  await prisma.account.delete({ where: { type_id: { type: platform, id: req.params.userId } } });
   res.sendStatus(204);
 }
 
-async function listOrgs(_req, res) {
-  const rows = await prisma.appInstallation.findMany({
-    include: { account: true, models: true, _count: { select: { keys: true } } },
-    orderBy: [{ platform: 'asc' }, { orgName: 'asc' }],
-  });
-  res.json(rows.map(orgView));
-}
-
-function orgView(o) {
+function orgView(o, ownerProfile) {
   return {
     id: o.id,
     platform: o.platform,
     orgName: o.orgName,
     installationId: o.installationId,
-    owner: { platform: o.accountType, id: o.accountId, username: o.account ? o.account.username : null },
+    owner: { platform: o.accountType, id: o.accountId, ...profiles.describe(o.accountId, ownerProfile) },
     keyCount: o._count ? o._count.keys : undefined,
     models: o.models ? Object.fromEntries(o.models.map((m) => [m.modality, m.model])) : undefined,
     createdAt: o.createdAt,
   };
 }
 
+// Org views with each importer's profile read from the platform.
+async function orgViews(rows, platform, token) {
+  const found = await profiles.getProfiles(platform, rows.map((o) => o.accountId), token);
+  return rows.map((o) => orgView(o, found.get(String(o.accountId))));
+}
+
+async function listOrgs(req, res) {
+  const { platform, token } = req.admin;
+  const rows = await prisma.appInstallation.findMany({
+    where: { platform },
+    include: { models: true, _count: { select: { keys: true } } },
+    orderBy: { orgName: 'asc' },
+  });
+  res.json(await orgViews(rows, platform, token));
+}
+
 async function deleteOrg(req, res) {
-  await prisma.appInstallation.delete({ where: { id: req.params.id } });
+  const { count } = await prisma.appInstallation.deleteMany({ where: { id: req.params.id, platform: req.admin.platform } });
+  if (count === 0) throw new HttpError(404, 'org not found');
   res.sendStatus(204);
 }
 
-async function listRepos(_req, res) {
-  const rows = await prisma.repository.findMany({ include: viewInclude, orderBy: [{ platform: 'asc' }, { fullName: 'asc' }] });
+async function listRepos(req, res) {
+  const rows = await prisma.repository.findMany({ where: { platform: req.admin.platform }, include: viewInclude, orderBy: { fullName: 'asc' } });
   res.json(rows.map(repoView));
 }
 
 async function deleteRepo(req, res) {
-  await prisma.repository.delete({ where: { id: req.params.id } });
+  const { count } = await prisma.repository.deleteMany({ where: { id: req.params.id, platform: req.admin.platform } });
+  if (count === 0) throw new HttpError(404, 'repository not found');
   res.sendStatus(204);
 }
 
-async function listKeys(_req, res) {
-  res.json(await keyStore.listKeys());
+// Keys whose owner (user, org or repository) is on the given platform.
+function onPlatform(platform) {
+  return { OR: [{ accountType: platform }, { appInstallation: { platform } }, { repository: { platform } }] };
+}
+
+// Names the user owners of key views by their platform login.
+async function nameUserOwners(keys, platform, token) {
+  const userIds = keys.filter((k) => k.owner.type === 'user').map((k) => k.owner.id);
+  const found = await profiles.getProfiles(platform, userIds, token);
+  for (const key of keys) {
+    if (key.owner.type === 'user') key.owner.name = profiles.describe(key.owner.id, found.get(String(key.owner.id))).login;
+  }
+  return keys;
+}
+
+async function listKeys(req, res) {
+  const { platform, token } = req.admin;
+  res.json(await nameUserOwners(await keyStore.listKeys(onPlatform(platform)), platform, token));
 }
 
 async function createKey(req, res) {
   const body = req.body || {};
   let owner;
+  const { platform } = req.admin;
   if (body.target === 'user') {
-    const accountType = platformParam(body.platform);
+    const accountType = platform;
     const accountId = requiredString(body.userId, 'userId');
     const account = await prisma.account.findUnique({ where: { type_id: { type: accountType, id: accountId } } });
     if (!account) throw new HttpError(400, `${accountType} user ${accountId} is not whitelisted`);
@@ -103,16 +148,17 @@ async function createKey(req, res) {
   } else if (body.target === 'org') {
     const appInstallationId = requiredString(body.appInstallationId, 'appInstallationId');
     const org = await prisma.appInstallation.findUnique({ where: { id: appInstallationId } });
-    if (!org) throw new HttpError(400, `org ${appInstallationId} does not exist`);
+    if (!org || org.platform !== platform) throw new HttpError(400, `org ${appInstallationId} does not exist`);
     owner = { appInstallationId };
   } else {
     throw new HttpError(400, 'target must be user or org');
   }
-  res.status(201).json(await keyStore.createKey(owner, body));
+  const [view] = await nameUserOwners([await keyStore.createKey(owner, body)], platform, req.admin.token);
+  res.status(201).json(view);
 }
 
 async function deleteKey(req, res) {
-  await keyStore.deleteKey({ id: req.params.id });
+  await keyStore.deleteKey({ id: req.params.id, ...onPlatform(req.admin.platform) });
   res.sendStatus(204);
 }
 
@@ -128,6 +174,8 @@ module.exports = {
   createKey,
   deleteKey,
   orgView,
+  orgViews,
+  nameUserOwners,
   platformParam,
   requiredString,
 };

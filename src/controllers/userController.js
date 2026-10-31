@@ -5,14 +5,15 @@ const prisma = require('../db');
 const keyStore = require('../services/keyStore');
 const models = require('../services/modelService');
 const platforms = require('../services/platformService');
-const { orgView } = require('./adminController');
+const { orgViews, nameUserOwners } = require('./adminController');
 const { HttpError } = require('../errors');
 
 const lower = (s) => String(s).toLowerCase();
 
+// The profile is GitHub's or GitLab's answer for this request's token; only the role is ours.
 function me(req, res) {
-  const { platform, id, login, account, isAdmin } = req.user;
-  res.json({ platform, id, login, username: account.username, isAdmin });
+  const { platform, id, login, name, avatarUrl, role } = req.user;
+  res.json({ platform, id, login, name, avatarUrl, role });
 }
 
 function ownKeys(user) {
@@ -20,11 +21,12 @@ function ownKeys(user) {
 }
 
 async function listOwnKeys(req, res) {
-  res.json(await keyStore.listKeys(ownKeys(req.user)));
+  res.json(await nameUserOwners(await keyStore.listKeys(ownKeys(req.user)), req.user.platform, req.user.token));
 }
 
 async function createOwnKey(req, res) {
-  res.status(201).json(await keyStore.createKey(ownKeys(req.user), req.body || {}));
+  const [view] = await nameUserOwners([await keyStore.createKey(ownKeys(req.user), req.body || {})], req.user.platform, req.user.token);
+  res.status(201).json(view);
 }
 
 async function deleteOwnKey(req, res) {
@@ -41,10 +43,11 @@ async function listOrgs(req, res) {
   const owned = new Set((await ownedOnPlatform(req.user)).map((o) => lower(o.name)));
   const rows = await prisma.appInstallation.findMany({
     where: { platform: req.user.platform },
-    include: { account: true, models: true, _count: { select: { keys: true } } },
+    include: { models: true, _count: { select: { keys: true } } },
     orderBy: { orgName: 'asc' },
   });
-  res.json(rows.filter((o) => owned.has(lower(o.orgName))).map(orgView));
+  const mine = rows.filter((o) => owned.has(lower(o.orgName)));
+  res.json(await orgViews(mine, req.user.platform, req.user.token));
 }
 
 // Orgs the user owns on the platform, and whether each can be imported.
@@ -83,9 +86,10 @@ async function importOrg(req, res) {
 
   const created = await prisma.appInstallation.create({
     data: { platform, orgName: org.name, installationId, accountType: platform, accountId: req.user.id },
-    include: { account: true, _count: { select: { keys: true } } },
+    include: { _count: { select: { keys: true } } },
   });
-  res.status(201).json(orgView(created));
+  const [view] = await orgViews([created], platform, req.user.token);
+  res.status(201).json(view);
 }
 
 async function requireOrgOwner(req) {
