@@ -1,7 +1,7 @@
 ---
 name: oauth-sign-in
 description: Task record for client ID and secret sign-in, admin user IDs and the renamed GitHub variables (1.3.0).
-status: in progress
+status: done
 ---
 
 # Client ID and secret sign-in
@@ -26,6 +26,6 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/oauth-sign-in` | `.agents/` | |
-| 2 | OAuth sign-in | Auth routes, admin IDs, renamed variables, tests, docs | git-server-agents | `feat/oauth-sign-in` | `src/`, `test/`, README, `.env.example` | |
-| 3 | Release | 1.3.0 changelog and version | git-server-agents | `release/1.3.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/oauth-sign-in` | `.agents/` | #23 |
+| 2 | OAuth sign-in | Auth routes, admin IDs, renamed variables, tests, docs | git-server-agents | `feat/oauth-sign-in` | `src/`, `test/`, README, `.env.example` | #24 |
+| 3 | Release | 1.3.0 changelog and version | git-server-agents | `release/1.3.0` | `wiki/logs/`, `package.json` | #25 |
