@@ -31,20 +31,20 @@ without a `/`, such as `@alice`, is treated as a normal mention.
 
 ## Setup
 
-Needs Node.js 22.12 or later (CI runs Node 26 LTS).
+Needs Node.js 22.22.2+, 24.15+ or 26 (`.nvmrc` pins 26 LTS, which CI uses: `nvm use`).
 
 ```bash
 cp .env.example .env              # fill in secrets, see below
 npm install
 npm run db:push                   # copies the schema for PROD, creates the tables, generates the client
 npm run db:seed                   # adds OpenRouter as the default provider
-npm run dev                       # server + worker on SQLite, with nodemon
+npm run dev                       # server + worker on SQLite, restarts on changes (node --watch)
 ```
 
 `PROD=prod` switches to PostgreSQL (`prisma/schema.prod.prisma`, `DATABASE_URL`); empty or
 `dev` uses SQLite at `prisma/dev.db`. `scripts/setup-db.js` copies the right file to
 `prisma/schema.prisma` before `dev`, `start` and `db:push`. Prisma 7 takes the connection URL
-from `prisma.config.js` and connects through a driver adapter (`better-sqlite3` or `pg`), picked
+from `prisma.config.js` and connects through a driver adapter (`libsql` or `pg`), picked
 the same way in `src/db.js`.
 
 | Variable | Purpose |
