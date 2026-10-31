@@ -53,7 +53,7 @@ test.after(async () => {
 test('signs in with the platform token and requires a whitelisted user', async () => {
   const me = await call('GET', '/me', { token: 'gh-alice' });
   assert.equal(me.status, 200);
-  assert.deepEqual(await me.json(), { platform: 'github', id: '1001', login: 'alice', username: 'alice' });
+  assert.deepEqual(await me.json(), { platform: 'github', id: '1001', login: 'alice', username: 'alice', isAdmin: false });
   assert.equal((await call('GET', '/me')).status, 401);
   assert.equal((await call('GET', '/me', { token: 'bogus' })).status, 401);
   assert.equal((await call('GET', '/me', { token: 'gh-stranger' })).status, 403);

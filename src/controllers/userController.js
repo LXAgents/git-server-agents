@@ -10,8 +10,8 @@ const { HttpError } = require('../errors');
 const lower = (s) => String(s).toLowerCase();
 
 function me(req, res) {
-  const { platform, id, login, account } = req.user;
-  res.json({ platform, id, login, username: account.username });
+  const { platform, id, login, account, isAdmin } = req.user;
+  res.json({ platform, id, login, username: account.username, isAdmin });
 }
 
 function ownKeys(user) {
