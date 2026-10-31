@@ -1,0 +1,15 @@
+.git
+.github
+node_modules
+.env
+.env.*
+!.env.example
+prisma/schema.prisma
+prisma/*.db
+prisma/*.db-journal
+test
+wiki
+.agents
+*.md
+Dockerfile
+.dockerignore

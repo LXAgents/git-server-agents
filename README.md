@@ -60,6 +60,42 @@ the same way in `src/db.js`.
 | `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes the admin API |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
+## Run with Docker
+
+The root `Dockerfile` builds one image with the server and the worker. It needs no build
+arguments. Every setting is an environment variable from the table above, and it listens on
+`PORT` (default 3000), so it runs on any platform that deploys a Dockerfile (Render, Railway,
+Fly.io, Cloud Run, Koyeb and others).
+
+```bash
+docker build -t git-server-agents .
+docker run -p 3000:3000 --env-file .env git-server-agents
+```
+
+On every start, `docker-entrypoint.sh` does the following, then starts the server:
+
+1. Picks the schema for `PROD`.
+2. Generates the Prisma client.
+3. Runs `prisma db push`, which creates or updates the tables. It stops instead of dropping data.
+4. Seeds OpenRouter.
+
+So an empty database is ready on first boot, with no shell needed. `/health` drives the
+container health check.
+
+- **Use PostgreSQL on a platform.** Most platforms wipe the container's disk on every deploy,
+  which would erase a SQLite file. Set `PROD=prod` and `DATABASE_URL` to the platform's managed
+  PostgreSQL. To keep SQLite anyway, mount a persistent volume at `/app/prisma`.
+- **Set at least these:**
+  - `ENCRYPTION_KEY` and `ADMIN_TOKEN`.
+  - The webhook secrets. They are required when `PROD=prod`.
+  - The GitHub App or GitLab credentials.
+  - `CORS_ORIGINS`, set to the dashboard's public URL.
+- **Whitelist users from the dashboard**, or with the CLI in the running container:
+  `docker exec <container> node scripts/manage.js list`. Platforms offer the same through their
+  shell or console.
+- **To split the worker out,** run a second service from the same image with the command
+  `node src/worker.js`, and set `WORKER_INLINE=false` on the web service.
+
 ## Whitelisting and API keys
 
 Users are whitelisted only by the operator. Orgs are created only by **import**: a
@@ -128,6 +164,7 @@ already grants everything; everyone else imports orgs.
 ```
 prisma/          schema.dev.prisma, schema.prod.prisma, seed.js (config: prisma.config.js)
 scripts/         setup-db.js, manage.js
+Dockerfile       production image; docker-entrypoint.sh prepares the database on start
 src/server.js    entry point (server + inline worker)
 src/worker.js    queue worker (`npm run worker` to run alone)
 src/routes/      webhook, admin and user routes
