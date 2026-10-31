@@ -70,10 +70,26 @@ test('start refuses a redirect outside CORS_ORIGINS and an unknown platform', as
   assert.equal((await get(`/api/auth/bitbucket/start?redirect=${encodeURIComponent(DASHBOARD)}`)).status, 404);
 });
 
-test('a GitHub callback returns the user token to the dashboard in the fragment', async () => {
+const exchange = (code) =>
+  fetch(`${base}/api/auth/exchange`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'http://localhost:5173' },
+    body: JSON.stringify({ code }),
+  });
+
+test('a GitHub callback sends back a one-time code, never the token, and the code is exchanged once', async () => {
   const { state, cookie } = await start('github');
   const res = await get(`/api/auth/github/callback?code=code-alice&state=${state}`, { cookie });
-  assert.deepEqual(fragment(res), { platform: 'github', token: 'gh-alice' });
+  assert.doesNotMatch(res.headers.get('location'), /gh-alice/);
+  const back = fragment(res);
+  assert.deepEqual(Object.keys(back), ['code']);
+  const first = await exchange(back.code);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await first.json(), { platform: 'github', token: 'gh-alice' });
+  const again = await exchange(back.code);
+  assert.equal(again.status, 400);
+  assert.match((await again.json()).error, /already used/);
   assert.equal(res.headers.get('cache-control'), 'no-store');
   assert.match(res.headers.get('set-cookie'), /gsa_oauth_nonce=;.*Max-Age=0/);
 });
@@ -83,7 +99,7 @@ test('a GitLab callback sends grant_type and returns the user token', async () =
   assert.equal(location.pathname, '/glweb/oauth/authorize');
   assert.equal(location.searchParams.get('scope'), 'read_api');
   const res = await get(`/api/auth/gitlab/callback?code=code-carol&state=${state}`, { cookie });
-  assert.deepEqual(fragment(res), { platform: 'gitlab', token: 'gl-carol' });
+  assert.deepEqual(await (await exchange(fragment(res).code)).json(), { platform: 'gitlab', token: 'gl-carol' });
 });
 
 test('a callback without the nonce cookie from start is refused', async () => {
@@ -117,4 +133,14 @@ test('a tampered, expired or cross-platform state is rejected', async () => {
 
   const old = oauth.signState({ platform: 'github', redirect: DASHBOARD, nonce: 'n' }, Date.now() - 11 * 60 * 1000);
   assert.throws(() => oauth.verifyState(old), /expired/);
+});
+
+test('an expired, tampered or missing code is refused', async () => {
+  const old = oauth.sealToken({ platform: 'github', token: 'gh-old' }, Date.now() - 61_000);
+  assert.match((await (await exchange(old)).json()).error, /expired/);
+  const good = oauth.sealToken({ platform: 'github', token: 'gh-x' });
+  const tampered = `${good.slice(0, -4)}AAAA`;
+  assert.equal((await exchange(tampered)).status, 400);
+  assert.equal((await exchange('junk')).status, 400);
+  assert.equal((await exchange(undefined)).status, 400);
 });

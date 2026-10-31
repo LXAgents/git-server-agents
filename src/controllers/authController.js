@@ -1,5 +1,5 @@
-// Browser redirects for "Continue with GitHub / GitLab". The token comes back to the dashboard
-// in the URL fragment, which browsers never send to a server.
+// Browser redirects for "Continue with GitHub / GitLab". The token never goes into a URL: the
+// dashboard gets a sealed one-time code in the fragment and swaps it with POST /exchange.
 const crypto = require('crypto');
 const config = require('../config');
 const oauth = require('../services/oauthService');
@@ -66,10 +66,15 @@ async function callback(req, res) {
 
   try {
     const token = await oauth.exchangeCode(platform, { code: String(req.query.code), redirectUri: callbackUrl(req, platform) });
-    return backToDashboard(res, redirect, { platform, token });
+    return backToDashboard(res, redirect, { code: oauth.sealToken({ platform, token }) });
   } catch (err) {
     return backToDashboard(res, redirect, { error: err.expose ? err.message : 'Sign-in failed.' });
   }
 }
 
-module.exports = { providers, start, callback };
+function exchange(req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.json(oauth.openCode(req.body && req.body.code));
+}
+
+module.exports = { providers, start, callback, exchange };

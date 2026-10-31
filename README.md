@@ -153,8 +153,12 @@ How it works:
 - `GET /api/auth/:platform/start?redirect=<dashboard URL>` accepts only a redirect whose origin
   is in `CORS_ORIGINS` (never `*`). It sends the browser to the platform with a signed, 10-minute
   `state`, tied to the browser by a cookie.
-- `GET /api/auth/:platform/callback` swaps the code for a user token and sends the browser back
-  with the token in the URL fragment. Browsers never send the fragment to a server.
+- `GET /api/auth/:platform/callback` swaps the platform's code for a user token. It sends the
+  browser back with `#code=<sealed>`, a one-time code that holds the token encrypted with
+  `ENCRYPTION_KEY` and expires after 60 seconds. The token itself never goes into a URL.
+- `POST /api/auth/exchange` with `{ "code": "…" }` answers `{ platform, token }`. Each code works
+  once. Dashboards older than 1.3.0 expect the token in the fragment and can't use this server's
+  OAuth sign-in.
 
 The token is then used like a personal access token. The server never stores it, the user must
 still be whitelisted, and org ownership is still checked live.
