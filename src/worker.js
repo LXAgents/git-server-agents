@@ -1,6 +1,6 @@
 const config = require('./config');
 const prisma = require('./db');
-const { processTask } = require('./services/agentService');
+const agent = require('./services/agentService');
 const { logSafe } = require('./utils/strings');
 
 function describe(err) {
@@ -20,31 +20,48 @@ async function claim(task) {
   return count === 1;
 }
 
-async function runOnce(limit = 10) {
+// Runs one claimed task to its end state and logs the outcome with how long it took.
+async function handle(task) {
+  const started = Date.now();
+  const label = `${task.id} ${task.platform}/${logSafe(task.event)}`;
+  console.log(`[worker] ${label} claimed`);
+  try {
+    const status = await agent.processTask(task);
+    await prisma.agentTask.update({ where: { id: task.id }, data: { status } });
+    console.log(`[worker] ${label} -> ${status} in ${Date.now() - started}ms`);
+  } catch (err) {
+    await prisma.agentTask.update({
+      where: { id: task.id },
+      data: { status: 'failed', errorLog: describe(err).slice(0, 10000) },
+    });
+    console.error(`[worker] ${label} -> failed in ${Date.now() - started}ms: ${logSafe(err.message)}`);
+  }
+}
+
+// Claims up to `limit` pending tasks, oldest first, and starts each one. Returns the promises.
+async function claimBatch(limit) {
+  if (limit <= 0) return [];
   const pending = await prisma.agentTask.findMany({
     where: { status: 'pending' },
     orderBy: { createdAt: 'asc' },
     take: limit,
   });
+  const started = [];
   for (const task of pending) {
-    if (!(await claim(task))) continue;
-    try {
-      const status = await processTask(task);
-      await prisma.agentTask.update({ where: { id: task.id }, data: { status } });
-      console.log(`[worker] ${task.id} ${task.platform}/${logSafe(task.event)} -> ${status}`);
-    } catch (err) {
-      await prisma.agentTask.update({
-        where: { id: task.id },
-        data: { status: 'failed', errorLog: describe(err).slice(0, 10000) },
-      });
-      console.error(`[worker] ${task.id} ${task.platform}/${logSafe(task.event)} -> failed: ${logSafe(err.message)}`);
-    }
+    if (await claim(task)) started.push(handle(task));
   }
-  return pending.length;
+  return started;
+}
+
+// One batch of up to `limit` tasks, run in parallel. Resolves once they are all done.
+async function runOnce(limit = config.worker.concurrency) {
+  const started = await claimBatch(limit);
+  await Promise.all(started);
+  return started.length;
 }
 
 // A task left in "processing" by a restart or redeploy would never finish. One that has been
-// there longer than any answer can take (6 model calls of 120 s per key) goes back to pending.
+// there far longer than an answer may take (TASK_TIMEOUT_MS) goes back to pending.
 const STALE_MS = 30 * 60_000;
 async function requeueStale(now = Date.now()) {
   const { count } = await prisma.agentTask.updateMany({
@@ -55,25 +72,38 @@ async function requeueStale(now = Date.now()) {
   return count;
 }
 
-function start({ pollMs = config.worker.pollMs } = {}) {
+// Keeps up to `concurrency` tasks running. A slow answer holds one slot, not the whole queue:
+// the next comment starts as soon as any slot is free.
+function start({ pollMs = config.worker.pollMs, concurrency = config.worker.concurrency } = {}) {
   let timer = null;
   let stopped = false;
+  let filling = false;
+  const running = new Set();
 
-  // Drains the queue before going back to sleep. `stopped` is set by the returned stop()
-  // while a batch is running.
-  const tick = async () => {
+  const fill = async () => {
+    if (stopped || filling) return;
+    filling = true;
     try {
-      for (;;) {
-        const processed = await runOnce();
-        if (processed === 0 || stopped) break;
+      for (const promise of await claimBatch(concurrency - running.size)) {
+        running.add(promise);
+        promise.finally(() => {
+          running.delete(promise);
+          void fill();
+        });
       }
     } catch (err) {
       console.error('[worker] poll failed:', err.message);
+    } finally {
+      filling = false;
     }
+  };
+
+  const tick = async () => {
+    await fill();
     if (!stopped) timer = setTimeout(() => void tick(), pollMs);
   };
 
-  console.log(`[worker] polling every ${pollMs}ms`);
+  console.log(`[worker] polling every ${pollMs}ms, up to ${concurrency} tasks at once`);
   requeueStale()
     .catch((err) => console.error('[worker] could not re-queue stale tasks:', err.message))
     .finally(() => {
