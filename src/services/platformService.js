@@ -11,7 +11,8 @@ const PER_PAGE = 100;
 
 function client(platform, token) {
   const baseURL = platform === 'github' ? config.github.apiUrl : config.gitlab.apiUrl;
-  const headers = { Authorization: `Bearer ${token}` };
+  // Without a token the call is anonymous, which public profile lookups allow.
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
   if (platform === 'github') {
     headers.Accept = 'application/vnd.github+json';
     headers['X-GitHub-Api-Version'] = '2022-11-28';
@@ -42,12 +43,34 @@ function sameName(a, b) {
   return String(a).toLowerCase() === String(b).toLowerCase();
 }
 
+// The public profile fields both platforms return for a user object.
+function profileOf(platform, data) {
+  return {
+    login: platform === 'github' ? data.login : data.username,
+    name: data.name || null,
+    avatarUrl: data.avatar_url || null,
+  };
+}
+
 async function getUser(platform, token) {
   try {
     const { data } = await client(platform, token).get('/user');
-    return { platform, id: String(data.id), login: platform === 'github' ? data.login : data.username };
+    return { platform, id: String(data.id), ...profileOf(platform, data) };
   } catch (err) {
     throw platformError(platform, err);
+  }
+}
+
+// Any user's public profile by numeric ID, or null when the platform can't say.
+// GitHub: GET /user/{id}. GitLab: GET /users/{id}.
+async function getUserById(platform, id, token) {
+  // The ID goes into a URL path, so only a plain number is used.
+  if (!/^\d+$/.test(String(id))) return null;
+  try {
+    const { data } = await client(platform, token).get(platform === 'github' ? `/user/${id}` : `/users/${id}`);
+    return profileOf(platform, data);
+  } catch {
+    return null;
   }
 }
 
@@ -154,4 +177,4 @@ async function findGithubInstallation(name, kind) {
   }
 }
 
-module.exports = { PLATFORMS, getUser, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, findGithubInstallation };
+module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, findGithubInstallation };

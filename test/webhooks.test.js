@@ -44,7 +44,7 @@ test.before(async () => {
   await prisma.account.upsert({
     where: { type_id: { type: 'github', id: USER_ID } },
     update: {},
-    create: { type: 'github', id: USER_ID, username: 'alice' },
+    create: { type: 'github', id: USER_ID },
   });
   await prisma.appInstallation.upsert({
     where: { platform_orgName: { platform: 'github', orgName: ORG } },

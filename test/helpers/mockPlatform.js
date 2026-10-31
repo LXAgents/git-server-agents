@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 
 const githubUsers = {
-  'gh-alice': { id: 1001, login: 'alice' },
+  'gh-alice': { id: 1001, login: 'alice', name: 'Alice Liddell', avatar_url: 'https://avatars.example/1001' },
   'gh-bob': { id: 1002, login: 'bob' },
   'gh-stranger': { id: 9999, login: 'stranger' },
 };
@@ -34,7 +34,9 @@ const openRouterModels = [
   { id: 'google/imagen', name: 'Imagen', pricing: { prompt: '0.1', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
 ];
 
-const gitlabUsers = { 'gl-carol': { id: 7, username: 'carol' }, 'gl-dave': { id: 8, username: 'dave' } };
+const gitlabUsers = { 'gl-carol': { id: 7, username: 'carol', name: 'Carol', avatar_url: 'https://gitlab.example/7.png' }, 'gl-dave': { id: 8, username: 'dave' } };
+// How many public profile lookups each platform answered, so tests can see the cache work.
+const profileLookups = { github: 0, gitlab: 0 };
 // group -> user id -> access level
 const gitlabMembers = { grp: { 7: 50, 8: 30 } };
 
@@ -51,6 +53,20 @@ function createMockPlatform() {
   const app = express();
   const gh = express.Router();
   const gl = express.Router();
+
+  // Public profiles by numeric ID answer without a token, as on the real platforms.
+  gh.get('/user/:id', (req, res, next) => {
+    // /user/repos, /user/memberships and the like are the signed-in user's own routes.
+    if (!/^\d+$/.test(req.params.id)) return next();
+    profileLookups.github += 1;
+    const user = Object.values(githubUsers).find((u) => String(u.id) === req.params.id);
+    return user ? res.json(user) : res.status(404).json({ message: 'Not Found' });
+  });
+  gl.get('/users/:id', (req, res) => {
+    profileLookups.gitlab += 1;
+    const user = Object.values(gitlabUsers).find((u) => String(u.id) === req.params.id);
+    return user ? res.json(user) : res.status(404).json({ message: '404 User Not Found' });
+  });
 
   gh.use((req, res, next) => {
     if (req.path.endsWith('/installation')) return next();
@@ -145,4 +161,4 @@ async function startMockPlatform() {
   return server;
 }
 
-module.exports = { startMockPlatform };
+module.exports = { startMockPlatform, profileLookups };

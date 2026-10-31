@@ -47,7 +47,7 @@ test.before(async () => {
   models = require('../src/services/modelService');
   const { createApp } = require('../src/app');
   await cleanup();
-  for (const [type, id, username] of WHITELIST) await prisma.account.create({ data: { type, id, username } });
+  for (const [type, id] of WHITELIST) await prisma.account.create({ data: { type, id } });
   for (const [platform, orgName, owner] of ORGS) {
     orgs[orgName] = await prisma.appInstallation.create({ data: { platform, orgName, accountType: platform, accountId: owner } });
   }

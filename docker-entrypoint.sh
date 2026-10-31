@@ -5,6 +5,8 @@ set -e
 
 node scripts/setup-db.js
 node_modules/.bin/prisma generate
+# Empties the username column 1.6 and earlier stored, so db push can drop it.
+node scripts/clear-usernames.js
 # Creates or updates the tables. It stops instead of dropping data on a destructive change.
 node_modules/.bin/prisma db push
 node prisma/seed.js

@@ -38,7 +38,7 @@ test.before(async () => {
   prisma = require('../src/db');
   const { createApp } = require('../src/app');
   await cleanup();
-  for (const [type, id, username] of WHITELIST) await prisma.account.create({ data: { type, id, username } });
+  for (const [type, id] of WHITELIST) await prisma.account.create({ data: { type, id } });
   server = createApp().listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -53,7 +53,15 @@ test.after(async () => {
 test('signs in with the platform token and requires a whitelisted user', async () => {
   const me = await call('GET', '/me', { token: 'gh-alice' });
   assert.equal(me.status, 200);
-  assert.deepEqual(await me.json(), { platform: 'github', id: '1001', login: 'alice', username: 'alice', isAdmin: false });
+  // The profile is GitHub's answer; only the role comes from our database.
+  assert.deepEqual(await me.json(), {
+    platform: 'github',
+    id: '1001',
+    login: 'alice',
+    name: 'Alice Liddell',
+    avatarUrl: 'https://avatars.example/1001',
+    role: 'member',
+  });
   assert.equal((await call('GET', '/me')).status, 401);
   assert.equal((await call('GET', '/me', { token: 'bogus' })).status, 401);
   assert.equal((await call('GET', '/me', { token: 'gh-stranger' })).status, 403);

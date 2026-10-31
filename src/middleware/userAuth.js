@@ -1,11 +1,13 @@
 const config = require('../config');
 const prisma = require('../db');
 const platforms = require('../services/platformService');
+const profiles = require('../services/profileService');
+const { OWNER } = require('../services/roles');
 const { HttpError } = require('../errors');
 
 // GITHUB_ADMIN_ID / GITLAB_ADMIN_ID hold numeric platform user IDs, never logins: a login can
-// be renamed and then claimed by someone else, an ID cannot.
-function isPlatformAdmin(platform, id) {
+// be renamed and then claimed by someone else, an ID cannot. These users become owners.
+function isConfiguredOwner(platform, id) {
   return config[platform].adminIds.includes(String(id));
 }
 
@@ -20,30 +22,37 @@ async function platformCaller(req) {
   if (!match) throw new HttpError(401, 'missing bearer token');
   const token = match[1].trim();
   const user = await platforms.getUser(platform, token);
-  return { ...user, token, isAdmin: isPlatformAdmin(platform, user.id) };
+  profiles.remember(platform, user.id, user);
+  return { ...user, token };
+}
+
+// The caller's whitelisted account, or null. A configured owner ID is whitelisted, and made an
+// owner, on first sign-in.
+async function findAccount(caller) {
+  const where = { type_id: { type: caller.platform, id: caller.id } };
+  const account = await prisma.account.findUnique({ where });
+  if (isConfiguredOwner(caller.platform, caller.id) && (!account || account.role !== OWNER)) {
+    return prisma.account.upsert({
+      where,
+      create: { type: caller.platform, id: caller.id, role: OWNER },
+      update: { role: OWNER },
+    });
+  }
+  return account;
 }
 
 // Signs a request in with the caller's own GitHub or GitLab token. The caller must also be
-// whitelisted by hand; an admin user is whitelisted on first sign-in.
+// whitelisted by hand, unless their ID is a configured owner.
 async function userAuth(req, _res, next) {
   try {
     const caller = await platformCaller(req);
-    const where = { type_id: { type: caller.platform, id: caller.id } };
-    let account = await prisma.account.findUnique({ where });
-    if (!account && caller.isAdmin) {
-      account = await prisma.account.upsert({
-        where,
-        create: { type: caller.platform, id: caller.id, username: caller.login },
-        update: {},
-      });
-    }
+    const account = await findAccount(caller);
     if (!account) throw new HttpError(403, 'user is not whitelisted');
-
-    req.user = { ...caller, account };
+    req.user = { ...caller, account, role: account.role };
     return next();
   } catch (err) {
     return next(err);
   }
 }
 
-module.exports = { userAuth, platformCaller, isPlatformAdmin };
+module.exports = { userAuth, platformCaller, findAccount, isConfiguredOwner };
