@@ -59,7 +59,6 @@ module.exports = {
     pollMs: Number(process.env.WORKER_POLL_MS) || 5000,
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
-  adminToken: process.env.ADMIN_TOKEN || '',
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')
     .split(',')
     .map((o) => o.trim())

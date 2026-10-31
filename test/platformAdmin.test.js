@@ -5,7 +5,6 @@ const crypto = require('crypto');
 const { startMockPlatform } = require('./helpers/mockPlatform');
 
 process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
-process.env.ADMIN_TOKEN = 'admin-test-token';
 // stranger (GitHub 9999) is not whitelisted; dave (GitLab 8) is a GitLab admin; alice is neither.
 process.env.GITHUB_ADMIN_ID = ' 9999 ';
 process.env.GITLAB_ADMIN_ID = '8';
@@ -54,11 +53,6 @@ test('any other platform user gets 403, and a bad token 401', async () => {
   assert.equal((await call('/api/admin/accounts', { token: 'bogus', platform: 'github' })).status, 401);
   // An ID from the other platform's list grants nothing.
   assert.equal((await call('/api/admin/accounts', { token: 'gh-alice', platform: 'gitlab' })).status, 401);
-});
-
-test('ADMIN_TOKEN still opens the admin API, for the platform it names', async () => {
-  assert.equal((await call('/api/admin/accounts', { token: 'admin-test-token', platform: 'gitlab' })).status, 200);
-  assert.equal((await call('/api/admin/accounts', { token: 'admin-test-token' })).status, 400);
 });
 
 test('a configured admin ID becomes an owner on first sign-in, and nothing about them is stored but the role', async () => {
