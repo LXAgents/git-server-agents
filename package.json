@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js",
     "prestart": "node scripts/setup-db.js && npx prisma generate",
     "start": "node src/server.js",
+    "worker": "node src/worker.js",
     "db:push": "node scripts/setup-db.js && npx prisma db push",
     "db:seed": "node prisma/seed.js",
     "test": "node --test"
