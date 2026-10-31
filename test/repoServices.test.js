@@ -22,7 +22,7 @@ app.get('/gh/repos/acme/web/git/trees/:ref', (req, res) =>
 );
 app.get('/gh/repos/acme/web/contents/*path', (req, res) => {
   const path = [].concat(req.params.path).join('/');
-  if (path === 'src/a b.js') return res.type('text/plain').send(`A at ${req.query.ref}`);
+  if (path === 'src/a b.js' && req.query.ref === 'abc') return res.type('text/plain').send('A at abc');
   return res.status(404).json({ message: 'Not Found' });
 });
 app.get('/gh/orgs/acme/members/:login', (req, res) => {
@@ -45,7 +45,7 @@ app.get('/gl/projects/12/repository/tree', (req, res) => {
   res.json(all.slice((page - 1) * 100, page * 100));
 });
 app.get('/gl/projects/12/repository/files/:path/raw', (req, res) =>
-  req.params.path === 'src/a.js' ? res.type('text/plain').send(`GL ${req.query.ref}`) : res.status(404).json({ message: '404 File Not Found' })
+  req.params.path === 'src/a.js' && req.query.ref === 'sha1' ? res.type('text/plain').send('GL sha1') : res.status(404).json({ message: '404 File Not Found' })
 );
 app.get('/gl/groups/grp', (_req, res) => res.json({ id: 99 }));
 app.get('/gl/groups/:group', (_req, res) => res.status(404).json({ message: '404 Group Not Found' }));

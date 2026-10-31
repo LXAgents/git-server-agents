@@ -76,7 +76,10 @@ async function isOwner(platform, token, user, orgName) {
       const { data } = await api.get(`/user/memberships/orgs/${encodeURIComponent(orgName)}`);
       return data.state === 'active' && data.role === 'admin';
     }
-    const { data } = await api.get(`/groups/${encodeURIComponent(orgName)}/members/all/${user.id}`);
+    // The ID comes from GitLab, but it still goes into a URL path: only a plain number is used.
+    const userId = String(user.id);
+    if (!/^[1-9]\d{0,18}$/.test(userId)) return false;
+    const { data } = await api.get(`/groups/${encodeURIComponent(orgName)}/members/all/${encodeURIComponent(userId)}`);
     return data.access_level >= GITLAB_OWNER;
   } catch (err) {
     if ([403, 404].includes(status(err))) return false;

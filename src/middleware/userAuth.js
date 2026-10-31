@@ -15,7 +15,8 @@ function isPlatformAdmin(platform, id) {
 async function platformCaller(req) {
   const platform = String(req.get('x-platform') || '').toLowerCase();
   if (!platforms.PLATFORMS.includes(platform)) throw new HttpError(400, 'X-Platform must be github or gitlab');
-  const match = /^Bearer\s+(.+)$/i.exec(req.get('authorization') || '');
+  // \s+ and \S+ can't overlap, so this stays linear on any header.
+  const match = /^Bearer\s+(\S+)$/i.exec(String(req.get('authorization') || '').trim());
   if (!match) throw new HttpError(401, 'missing bearer token');
   const token = match[1].trim();
   const user = await platforms.getUser(platform, token);

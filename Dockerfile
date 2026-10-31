@@ -13,9 +13,17 @@ RUN chown node:node /app
 USER node
 
 COPY --chown=node:node package.json package-lock.json ./
-RUN npm ci --omit=dev && rm -rf /home/node/.npm
+# No install scripts, except the two Prisma packages approved in package.json "allowScripts"
+# (they fetch the schema engine that "prisma db push" needs).
+RUN npm ci --omit=dev --ignore-scripts \
+ && npm rebuild prisma @prisma/engines \
+ && rm -rf /home/node/.npm
 
-COPY --chown=node:node . .
+# Only what the server runs; nothing else from the build context ends up in the image.
+COPY --chown=node:node prisma.config.js docker-entrypoint.sh ./
+COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node prisma ./prisma
+COPY --chown=node:node src ./src
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

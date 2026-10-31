@@ -8,7 +8,7 @@ const databaseUrl = isProd
   ? process.env.DATABASE_URL || ''
   : `file:${path.join(__dirname, '..', 'prisma', 'dev.db')}`;
 
-const trimSlash = (url) => url.replace(/\/+$/, '');
+const { trimTrailingSlashes: trimSlash } = require('./utils/strings');
 const idList = (value) => String(value || '').split(',').map((id) => id.trim()).filter(Boolean);
 const gitlabApiUrl = process.env.GITLAB_API_URL || 'https://gitlab.com/api/v4';
 

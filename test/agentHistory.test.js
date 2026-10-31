@@ -42,3 +42,14 @@ test('the system prompt handles an issue with no diff and mentions the tools', (
   assert.match(mr, /```diff/);
   assert.doesNotMatch(mr, /list_files/);
 });
+
+test('strips the model footer, and stays fast on bodies built to slow a regex down', () => {
+  assert.deepEqual(buildHistory([{ id: 1, author: 'bot', body: reply('Answer\n\n<sub>keep</sub>') }]), [
+    { role: 'assistant', content: 'Answer\n\n<sub>keep</sub>' },
+  ]);
+  const hostile = `${REPLY_MARKER}${'\n'.repeat(100_000)}<sub>Model: \`x`;
+  const started = Date.now();
+  const [message] = buildHistory([{ id: 1, author: 'bot', body: hostile }]);
+  assert.equal(message.content, '<sub>Model: `x');
+  assert.ok(Date.now() - started < 200);
+});

@@ -25,7 +25,8 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      # Install scripts run only for the Prisma packages approved in package.json "allowScripts".
+      - run: npm ci --ignore-scripts && npm rebuild prisma @prisma/engines
       - run: npm run db:push
       - run: npm run db:seed
       - run: npm test
@@ -51,7 +52,8 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      # Install scripts run only for the Prisma packages approved in package.json "allowScripts".
+      - run: npm ci --ignore-scripts && npm rebuild prisma @prisma/engines
       - run: npm run db:push
       - run: npm run db:seed
       - run: npm test

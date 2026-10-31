@@ -1,6 +1,8 @@
 // Read-only access to the repository the comment was made in, through the GitHub or GitLab
 // REST APIs (never a clone). The model reaches it through two tools; models without tool
 // support get the same context added to the prompt instead.
+const { trimTrailingSlashes } = require('../utils/strings');
+
 const github = require('./githubService');
 const gitlab = require('./gitlabService');
 
@@ -35,10 +37,11 @@ const TOOLS = [
 ];
 
 function cleanPath(path) {
-  return String(path || '')
-    .trim()
-    .replace(/^\.?\/+/, '')
-    .replace(/\/+$/, '');
+  return trimTrailingSlashes(
+    String(path || '')
+      .trim()
+      .replace(/^\.?\/+/, '')
+  );
 }
 
 // `source` is { platform, repo, projectId, ref, token }.
