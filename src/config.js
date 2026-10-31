@@ -41,7 +41,8 @@ module.exports = {
     adminIds: idList(process.env.GITLAB_ADMIN_ID),
   },
   ai: {
-    defaultModel: process.env.DEFAULT_MODEL || 'openrouter/auto',
+    // Only a suggestion now: comments must name their model on line 1.
+    defaultModel: process.env.DEFAULT_MODEL || 'openrouter/free',
     providerName: 'OpenRouter',
     maxDiffChars: Number(process.env.MAX_DIFF_CHARS) || 100000,
   },
