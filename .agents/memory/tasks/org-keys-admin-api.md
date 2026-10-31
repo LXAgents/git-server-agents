@@ -100,3 +100,6 @@ status: done
 - Version 1.1.0 (minor: new features, nullable schema change). `package.json` and the lock
   file bumped; `wiki/logs/1/1/0/CHANGELOG.md` and the log index added; README documents both
   APIs, the key order and the CLI. PR column filled. Record closed.
+- CI cost: restacking after every merge force-pushed every open branch and ran CI on each
+  (56 runs). The workflow now runs only for `master` pushes and PRs into `master`, skips
+  doc-only changes, cancels superseded runs and has 10-minute job timeouts.

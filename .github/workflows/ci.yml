@@ -1,13 +1,24 @@
 name: CI
 
+# Runs only where it counts: pushes to master and pull requests into master. Stacked pull
+# requests (base is another feature branch) are checked once they are retargeted to master.
 on:
   push:
     branches: [master]
+    paths-ignore: ['**.md', '.agents/**', 'wiki/**']
   pull_request:
+    branches: [master]
+    paths-ignore: ['**.md', '.agents/**', 'wiki/**']
+
+# A newer push to the same pull request or branch cancels the older, now pointless run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-sqlite:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,6 +32,7 @@ jobs:
 
   test-postgres:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       PROD: prod
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agents

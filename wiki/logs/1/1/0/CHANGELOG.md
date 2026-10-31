@@ -20,6 +20,12 @@ Org-level API keys, runtime key fallback, and REST APIs for the git-client-agent
 - **Behaviour change:** the 1.0.0 fallback to the org owner's personal keys is gone. If an
   org relied on its owner's key, add it to the org with `add-org-key` or the dashboard.
 
+## CI
+
+- CI runs only on pushes to `master` and pull requests into `master`, skips doc-only
+  changes, cancels superseded runs, and times out after 10 minutes per job. Stacked pull
+  requests no longer each start their own runs.
+
 ## Security
 
 - Keys are shown with their last four characters only.
