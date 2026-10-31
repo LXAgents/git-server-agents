@@ -33,3 +33,14 @@ status: in-progress
 
 - Created this record, the memory index, and a `.gitignore` that excludes `node_modules/`,
   `.env`, the generated `prisma/schema.prisma`, SQLite files and `.agents/plans/`.
+
+### Task 2 — build/project-setup
+
+- `npm init`, runtime deps `express`, `axios`, `@prisma/client`, `dotenv`; dev deps `prisma`,
+  `nodemon`. Prisma pinned to 6 (see `decisions/prisma-6.md`).
+- `prisma/schema.dev.prisma` (SQLite) and `prisma/schema.prod.prisma` (PostgreSQL) share the
+  same models; `scripts/setup-db.js` copies one to the git-ignored `prisma/schema.prisma`.
+- `prisma/seed.js` upserts the OpenRouter provider by `displayName` (not unique in the
+  schema, so it looks the row up first). Ran twice against SQLite: one row, same id.
+- `npm run db:push` and `npx prisma validate` (PostgreSQL schema) both pass.
+- Next task depends on: `npm run predev` generating the client before `src/` exists.

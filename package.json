@@ -1,0 +1,43 @@
+{
+  "name": "git-server-agents",
+  "version": "1.0.0",
+  "description": "Zero-trust webhook server and AI agent for GitHub and GitLab apps",
+  "main": "src/server.js",
+  "scripts": {
+    "setup-db": "node scripts/setup-db.js",
+    "predev": "node scripts/setup-db.js && npx prisma generate",
+    "dev": "nodemon src/server.js",
+    "prestart": "node scripts/setup-db.js && npx prisma generate",
+    "start": "node src/server.js",
+    "db:push": "node scripts/setup-db.js && npx prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LXAgents/git-server-agents.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LXAgents/git-server-agents/issues"
+  },
+  "homepage": "https://github.com/LXAgents/git-server-agents#readme",
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "axios": "^1.21.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "prisma": "^6.19.3"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
