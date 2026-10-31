@@ -15,6 +15,13 @@ const githubMemberships = {
 };
 const githubInstallations = { 'orgs/acme': 555, 'users/alice': 777 };
 
+// OpenRouter's /models answer.
+const openRouterModels = [
+  { id: 'openai/gpt-5', name: 'GPT-5', context_length: 400000, pricing: { prompt: '0.00000125', completion: '0.00001' }, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } },
+  { id: 'openrouter/free', name: 'Free Models Router', context_length: 200000, pricing: { prompt: '0', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+  { id: 'google/imagen', name: 'Imagen', pricing: { prompt: '0.1', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
+];
+
 const gitlabUsers = { 'gl-carol': { id: 7, username: 'carol' }, 'gl-dave': { id: 8, username: 'dave' } };
 // group -> user id -> access level
 const gitlabMembers = { grp: { 7: 50, 8: 30 } };
@@ -85,6 +92,7 @@ function createMockPlatform() {
     return token ? res.json({ access_token: token, token_type: 'Bearer' }) : res.status(400).json({ error: 'invalid_grant' });
   });
 
+  app.get('/or/models', (_req, res) => res.json({ data: openRouterModels }));
   app.use('/gh', gh);
   app.use('/gl', gl);
   return app;
@@ -97,6 +105,7 @@ async function startMockPlatform() {
   const base = `http://127.0.0.1:${server.address().port}`;
   const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   process.env.GITHUB_API_URL = `${base}/gh`;
+  process.env.OPENROUTER_API_URL = `${base}/or`;
   process.env.GITLAB_API_URL = `${base}/gl`;
   process.env.GITHUB_URL = `${base}/ghweb`;
   process.env.GITLAB_URL = `${base}/glweb`;

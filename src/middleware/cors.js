@@ -8,7 +8,7 @@ function cors(req, res, next) {
   if (origin && (allowed.includes('*') || allowed.includes(origin))) {
     res.set('Access-Control-Allow-Origin', allowed.includes('*') ? '*' : origin);
     res.set('Vary', 'Origin');
-    res.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    res.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Authorization,Content-Type,X-Platform');
     res.set('Access-Control-Max-Age', '600');
   }

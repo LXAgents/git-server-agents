@@ -3,6 +3,7 @@
 // whether the user owns that org; the answer is never stored.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
+const models = require('../services/modelService');
 const platforms = require('../services/platformService');
 const { orgView } = require('./adminController');
 const { HttpError } = require('../errors');
@@ -40,7 +41,7 @@ async function listOrgs(req, res) {
   const owned = new Set((await ownedOnPlatform(req.user)).map((o) => lower(o.name)));
   const rows = await prisma.appInstallation.findMany({
     where: { platform: req.user.platform },
-    include: { account: true, _count: { select: { keys: true } } },
+    include: { account: true, models: true, _count: { select: { keys: true } } },
     orderBy: { orgName: 'asc' },
   });
   res.json(rows.filter((o) => owned.has(lower(o.orgName))).map(orgView));
@@ -117,8 +118,36 @@ async function deleteOrgKey(req, res) {
   res.sendStatus(204);
 }
 
+// OpenRouter's live model list for one modality (only text for now).
+async function listModels(req, res) {
+  res.json(await models.listModels(String(req.query.modality || 'text')));
+}
+
+async function getOwnModels(req, res) {
+  res.json(await models.getModels(ownKeys(req.user)));
+}
+
+async function setOwnModel(req, res) {
+  res.json(await models.setModel(ownKeys(req.user), req.body || {}));
+}
+
+async function getOrgModels(req, res) {
+  const org = await requireOrgOwner(req);
+  res.json(await models.getModels({ appInstallationId: org.id }));
+}
+
+async function setOrgModel(req, res) {
+  const org = await requireOrgOwner(req);
+  res.json(await models.setModel({ appInstallationId: org.id }, req.body || {}));
+}
+
 module.exports = {
   me,
+  listModels,
+  getOwnModels,
+  setOwnModel,
+  getOrgModels,
+  setOrgModel,
   listOwnKeys,
   createOwnKey,
   deleteOwnKey,
