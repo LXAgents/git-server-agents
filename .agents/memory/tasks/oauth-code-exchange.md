@@ -1,7 +1,7 @@
 ---
 name: oauth-code-exchange
 description: Task record for returning a sealed one-time code instead of the OAuth token in the URL (1.5.0).
-status: in-progress
+status: done
 ---
 
 # OAuth code exchange
@@ -23,6 +23,6 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/oauth-code-exchange` | `.agents/` | |
-| 2 | Code exchange | Sealed code, exchange endpoint, tests, README | git-server-agents | `feat/oauth-code-exchange` | `src/`, `test/`, README | |
-| 3 | Release | 1.5.0 changelog and version | git-server-agents | `release/1.5.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/oauth-code-exchange` | `.agents/` | #35 |
+| 2 | Code exchange | Sealed code, exchange endpoint, tests, README | git-server-agents | `feat/oauth-code-exchange` | `src/`, `test/`, README | #36 |
+| 3 | Release | 1.5.0 changelog and version | git-server-agents | `release/1.5.0` | `wiki/logs/`, `package.json` | #37 |
