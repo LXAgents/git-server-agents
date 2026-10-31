@@ -14,6 +14,9 @@ router.delete('/accounts/:platform/:userId', admin.deleteAccount);
 router.get('/orgs', admin.listOrgs);
 router.delete('/orgs/:id', admin.deleteOrg);
 
+router.get('/repos', admin.listRepos);
+router.delete('/repos/:id', admin.deleteRepo);
+
 router.get('/keys', admin.listKeys);
 router.post('/keys', admin.createKey);
 router.delete('/keys/:id', admin.deleteKey);

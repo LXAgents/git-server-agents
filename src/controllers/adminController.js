@@ -2,6 +2,7 @@
 // because they come in by import (see userController).
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
+const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
 const { HttpError } = require('../errors');
 
@@ -76,6 +77,16 @@ async function deleteOrg(req, res) {
   res.sendStatus(204);
 }
 
+async function listRepos(_req, res) {
+  const rows = await prisma.repository.findMany({ include: viewInclude, orderBy: [{ platform: 'asc' }, { fullName: 'asc' }] });
+  res.json(rows.map(repoView));
+}
+
+async function deleteRepo(req, res) {
+  await prisma.repository.delete({ where: { id: req.params.id } });
+  res.sendStatus(204);
+}
+
 async function listKeys(_req, res) {
   res.json(await keyStore.listKeys());
 }
@@ -111,6 +122,8 @@ module.exports = {
   deleteAccount,
   listOrgs,
   deleteOrg,
+  listRepos,
+  deleteRepo,
   listKeys,
   createKey,
   deleteKey,

@@ -4,7 +4,7 @@ const prisma = require('../db');
 const { encrypt, decrypt } = require('./cryptoService');
 const { HttpError } = require('../errors');
 
-const include = { provider: true, appInstallation: true, account: true };
+const include = { provider: true, appInstallation: true, account: true, repository: true };
 
 function last4(row) {
   try {
@@ -14,10 +14,14 @@ function last4(row) {
   }
 }
 
+function ownerView(row) {
+  if (row.repository) return { type: 'repo', id: row.repository.id, platform: row.repository.platform, name: row.repository.fullName };
+  if (row.appInstallation) return { type: 'org', id: row.appInstallation.id, platform: row.appInstallation.platform, name: row.appInstallation.orgName };
+  return { type: 'user', id: row.accountId, platform: row.accountType, name: (row.account && row.account.username) || row.accountId };
+}
+
 function toView(row) {
-  const owner = row.appInstallation
-    ? { type: 'org', id: row.appInstallation.id, platform: row.appInstallation.platform, name: row.appInstallation.orgName }
-    : { type: 'user', id: row.accountId, platform: row.accountType, name: (row.account && row.account.username) || row.accountId };
+  const owner = ownerView(row);
   return {
     id: row.id,
     owner,
@@ -34,7 +38,7 @@ async function listKeys(where = {}) {
   return rows.map(toView);
 }
 
-// `owner` is { accountType, accountId } or { appInstallationId }.
+// `owner` is { accountType, accountId }, { appInstallationId } or { repositoryId }.
 async function createKey(owner, { apiKey, priority, provider = 'OpenRouter' }) {
   if (typeof apiKey !== 'string' || !apiKey.trim()) throw new HttpError(400, 'apiKey is required');
   const providerRow = await prisma.provider.findFirst({ where: { displayName: provider } });

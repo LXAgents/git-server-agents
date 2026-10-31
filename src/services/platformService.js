@@ -87,6 +87,58 @@ async function isOwner(platform, token, user, orgName) {
   }
 }
 
+const GITLAB_MAINTAINER = 40;
+const MAX_REPO_PAGES = 10;
+const NUMERIC_ID = /^[1-9]\d{0,18}$/;
+
+async function paginateCapped(api, url, params) {
+  const items = [];
+  for (let page = 1; page <= MAX_REPO_PAGES; page += 1) {
+    const { data } = await api.get(url, { params: { ...params, per_page: PER_PAGE, page } });
+    items.push(...data);
+    if (data.length < PER_PAGE) break;
+  }
+  return items;
+}
+
+// Repositories (GitHub) or projects (GitLab) the user administers: GitHub admin permission,
+// or GitLab Maintainer and above. `org` is the top-level owner or group.
+async function listAdminRepos(platform, token) {
+  const api = client(platform, token);
+  try {
+    if (platform === 'github') {
+      const repos = await paginateCapped(api, '/user/repos', { affiliation: 'owner,collaborator,organization_member' });
+      return repos
+        .filter((r) => r.permissions && r.permissions.admin)
+        .map((r) => ({ externalId: String(r.id), fullName: r.full_name, org: r.owner.login }));
+    }
+    const projects = await paginateCapped(api, '/projects', { membership: true, min_access_level: GITLAB_MAINTAINER, simple: true });
+    return projects.map((p) => ({ externalId: String(p.id), fullName: p.path_with_namespace, org: p.path_with_namespace.split('/')[0] }));
+  } catch (err) {
+    throw platformError(platform, err);
+  }
+}
+
+// Whether the user administers the repository right now. Asked live, never stored.
+async function isRepoAdmin(platform, token, user, repo) {
+  const api = client(platform, token);
+  try {
+    if (platform === 'github') {
+      const [owner, name] = String(repo.fullName).split('/');
+      const { data } = await api.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+      return String(data.id) === String(repo.externalId) && Boolean(data.permissions && data.permissions.admin);
+    }
+    const projectId = String(repo.externalId);
+    const userId = String(user.id);
+    if (!NUMERIC_ID.test(projectId) || !NUMERIC_ID.test(userId)) return false;
+    const { data } = await api.get(`/projects/${encodeURIComponent(projectId)}/members/all/${encodeURIComponent(userId)}`);
+    return data.access_level >= GITLAB_MAINTAINER;
+  } catch (err) {
+    if ([403, 404].includes(status(err))) return false;
+    throw platformError(platform, err);
+  }
+}
+
 // GitHub only: the App installation on an org or user account, or null if not installed.
 async function findGithubInstallation(name, kind) {
   const path = kind === 'user' ? `/users/${encodeURIComponent(name)}/installation` : `/orgs/${encodeURIComponent(name)}/installation`;
@@ -102,4 +154,4 @@ async function findGithubInstallation(name, kind) {
   }
 }
 
-module.exports = { PLATFORMS, getUser, listOwnedOrgs, isOwner, findGithubInstallation };
+module.exports = { PLATFORMS, getUser, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, findGithubInstallation };
