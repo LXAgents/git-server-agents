@@ -45,7 +45,7 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 // The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
 // linear on any comment body.
 const FOOTER_START = '<sub>Model: `';
-const FOOTER = /^<sub>Model: `[^`]*`<\/sub>\s*$/;
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>Cost: `[^`]*`<\/sub>)?\s*$/;
 function stripReply(body) {
   const text = body.replace(REPLY_MARKER, '').trim();
   const start = text.lastIndexOf(FOOTER_START);
@@ -115,6 +115,24 @@ function toolsUnsupported(err) {
   return /tool/i.test(text);
 }
 
+// Adds one call's cost to the answer's total. A call without a reported cost makes the total
+// a lower bound, shown with "≥".
+function addCost(spend, cost) {
+  if (typeof cost === 'number') spend.cost += cost;
+  else spend.complete = false;
+}
+
+// In US dollars: "0 USD" for free models, otherwise up to six decimals without trailing
+// zeros, e.g. "0.000123 USD". Below a millionth it shows "< 0.000001 USD".
+function formatCost(spend) {
+  if (!spend || (spend.cost === 0 && !spend.complete)) return 'unknown';
+  let amount;
+  if (spend.cost === 0) amount = '0 USD';
+  else if (spend.cost < 0.000001) amount = '< 0.000001 USD';
+  else amount = `${spend.cost.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} USD`;
+  return spend.complete ? amount : `≥ ${amount}`;
+}
+
 // The error for an answer that ran out of its TASK_TIMEOUT_MS.
 function deadlineError(limitMs) {
   const err = new Error(`the answer took longer than ${limitMs}ms`);
@@ -130,9 +148,10 @@ async function timedCall(request, apiKey, messages, tools) {
   const remaining = deadline ? deadline - Date.now() : config.ai.modelTimeoutMs;
   if (remaining <= 0) throw deadlineError(limitMs);
   const started = Date.now();
-  const { deadline: _d, limitMs: _l, label: _n, ...body } = request;
+  const { deadline: _d, limitMs: _l, label: _n, spend, ...body } = request;
   try {
     const reply = await openRouter.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
+    if (spend) addCost(spend, reply.cost);
     console.log(`[agent] ${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`);
     return reply;
   } catch (err) {
@@ -313,6 +332,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     deadline: ctx.started + config.ai.taskTimeoutMs,
     limitMs: config.ai.taskTimeoutMs,
     label: `task ${task.id}: `,
+    spend: { cost: 0, complete: true },
   };
   console.log(`[agent] task ${task.id}: asking ${logSafe(model)} with ${candidates.length} key(s)`);
   const answer = await chatWithFallback(candidates, (key) =>
@@ -326,7 +346,8 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     })
   );
 
-  await postReply(task.platform, comment, `${answer}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`, token);
+  const footer = `<sub>Model: \`${model}\`</sub>\n<sub>Cost: \`${formatCost(request.spend)}\`</sub>`;
+  await postReply(task.platform, comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
   return 'success';
 }
 
@@ -364,4 +385,4 @@ async function processTask(task) {
   }
 }
 
-module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };
+module.exports = { formatCost, processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };

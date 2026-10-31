@@ -50,7 +50,7 @@ function stubAll(t, { member = true, history = [], repository = null, collaborat
   });
   t.mock.method(openRouter, 'complete', async (req) => {
     calls.complete.push(req);
-    return { content: 'The answer.' };
+    return { content: 'The answer.', cost: 0.000123 };
   });
   t.mock.method(console, 'info', () => {});
   return calls;
@@ -162,7 +162,7 @@ test('an org member gets the org keys as fallback, with history and the issue de
     ]
   );
   assert.equal(github.getRepoTree.mock.callCount(), 0);
-  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n${REPLY_MARKER}`));
+  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n${REPLY_MARKER}`));
 });
 
 test('a user who is not an org member never falls back to org keys', async (t) => {
@@ -309,4 +309,14 @@ test('an answer that runs past TASK_TIMEOUT_MS is cut short with a TIMEOUT reply
   await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), (err) => err.deadline === 30);
   assert.match(calls.posted[0].body, /`TIMEOUT`/);
   assert.match(calls.posted[0].body, /limit for one comment/);
+});
+
+test('the cost line adds up every model call of the answer, in USD', () => {
+  const { formatCost } = require('../src/services/agentService');
+  assert.equal(formatCost({ cost: 0, complete: true }), '0 USD');
+  assert.equal(formatCost({ cost: 0.000123, complete: true }), '0.000123 USD');
+  assert.equal(formatCost({ cost: 0.0215, complete: true }), '0.0215 USD');
+  assert.equal(formatCost({ cost: 0.0000001, complete: true }), '< 0.000001 USD');
+  assert.equal(formatCost({ cost: 0.002, complete: false }), '≥ 0.002 USD');
+  assert.equal(formatCost({ cost: 0, complete: false }), 'unknown');
 });
