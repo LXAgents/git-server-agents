@@ -11,10 +11,11 @@ model Account {
   type          String
   id            String
   username      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   keys          AccountKey[]
   installations AppInstallation[]
+
   @@id([type, id])
 }
 
@@ -28,40 +29,46 @@ model Provider {
 }
 
 model AccountKey {
-  id              String   @id @default(cuid())
-  accountType     String
-  accountId       String
-  providerId      String
-  apiKeyEncrypted String
-  isActive        Boolean  @default(true)
-  priority        Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  account         Account  @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
-  provider        Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  id                String           @id @default(cuid())
+  accountType       String?
+  accountId         String?
+  appInstallationId String?
+  providerId        String
+  apiKeyEncrypted   String
+  isActive          Boolean          @default(true)
+  priority          Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  account           Account?         @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  appInstallation   AppInstallation? @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+  provider          Provider         @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
   @@index([accountType, accountId])
+  @@index([appInstallationId])
 }
 
 model AppInstallation {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   platform       String
   orgName        String
   installationId String?
   accountType    String
   accountId      String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  account        Account  @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  account        Account      @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  keys           AccountKey[]
+
   @@unique([platform, orgName])
 }
 
 model AgentTask {
-  id          String   @id @default(cuid())
-  platform    String
-  event       String
-  status      String   @default("pending")
-  payload     String
-  errorLog    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  platform  String
+  event     String
+  status    String   @default("pending")
+  payload   String
+  errorLog  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
