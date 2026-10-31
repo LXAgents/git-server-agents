@@ -14,6 +14,7 @@ model Account {
   updatedAt     DateTime          @updatedAt
   keys          AccountKey[]
   installations AppInstallation[]
+  models        ModelSetting[]
 
   @@id([type, id])
 }
@@ -32,6 +33,7 @@ model AccountKey {
   accountType       String?
   accountId         String?
   appInstallationId String?
+  repositoryId      String?
   providerId        String
   apiKeyEncrypted   String
   isActive          Boolean          @default(true)
@@ -40,10 +42,12 @@ model AccountKey {
   updatedAt         DateTime         @updatedAt
   account           Account?         @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
   appInstallation   AppInstallation? @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+  repository        Repository?      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   provider          Provider         @relation(fields: [providerId], references: [id], onDelete: Restrict)
 
   @@index([accountType, accountId])
   @@index([appInstallationId])
+  @@index([repositoryId])
 }
 
 model AppInstallation {
@@ -55,10 +59,51 @@ model AppInstallation {
   accountId      String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  account        Account      @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  account        Account        @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
   keys           AccountKey[]
+  repositories   Repository[]
+  models         ModelSetting[]
 
   @@unique([platform, orgName])
+}
+
+// A repository (GitHub) or project (GitLab) inside an imported org, added by one of its
+// admins so it can have its own model and keys. externalId is the platform's numeric id.
+model Repository {
+  id                String          @id @default(cuid())
+  platform          String
+  externalId        String
+  fullName          String
+  appInstallationId String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  appInstallation   AppInstallation @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+  keys              AccountKey[]
+  models            ModelSetting[]
+
+  @@unique([platform, externalId])
+  @@index([appInstallationId])
+}
+
+// The model a user, org or repo picks for one modality (text, image, ...). Exactly one owner
+// is set.
+model ModelSetting {
+  id                String           @id @default(cuid())
+  modality          String
+  model             String
+  accountType       String?
+  accountId         String?
+  appInstallationId String?
+  repositoryId      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  account           Account?         @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  appInstallation   AppInstallation? @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+  repository        Repository?      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([accountType, accountId])
+  @@index([appInstallationId])
+  @@index([repositoryId])
 }
 
 model AgentTask {
