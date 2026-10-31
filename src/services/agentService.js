@@ -14,7 +14,7 @@ const { TOOLS, createRepoTools } = require('./repoTools');
 const { logSafe } = require('../utils/strings');
 
 const MAX_HISTORY_CHARS = 30_000;
-const MAX_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 3;
 
 function truncate(text, max) {
   if (text.length <= max) return text;
@@ -45,7 +45,7 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 // The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
 // linear on any comment body.
 const FOOTER_START = '<sub>Model: `';
-const FOOTER = /^<sub>Model: `[^`]*`<\/sub>\s*$/;
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>Cost: `[^`]*`<\/sub>)?\s*$/;
 function stripReply(body) {
   const text = body.replace(REPLY_MARKER, '').trim();
   const start = text.lastIndexOf(FOOTER_START);
@@ -96,7 +96,7 @@ async function chatWithFallback(candidates, attempt) {
       const status = (err.response && err.response.status) || err.code || 'error';
       attempts.push({ owner: key.owner, status });
       err.attempts = attempts;
-      if (!isKeySpecific(err)) throw err;
+      if (!isKeySpecific(err) || err.deadline) throw err;
       if (index < candidates.length - 1) {
         console.warn(`[agent] ${key.owner} key ${key.id} failed (${status}), falling back to next...`);
       }
@@ -115,10 +115,56 @@ function toolsUnsupported(err) {
   return /tool/i.test(text);
 }
 
+// Adds one call's cost to the answer's total. A call without a reported cost makes the total
+// a lower bound, shown with "≥".
+function addCost(spend, cost) {
+  if (typeof cost === 'number') spend.cost += cost;
+  else spend.complete = false;
+}
+
+// In US dollars: "0 USD" for free models, otherwise up to six decimals without trailing
+// zeros, e.g. "0.000123 USD". Below a millionth it shows "< 0.000001 USD".
+function formatCost(spend) {
+  if (!spend || (spend.cost === 0 && !spend.complete)) return 'unknown';
+  let amount;
+  if (spend.cost === 0) amount = '0 USD';
+  else if (spend.cost < 0.000001) amount = '< 0.000001 USD';
+  else amount = `${spend.cost.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} USD`;
+  return spend.complete ? amount : `≥ ${amount}`;
+}
+
+// The error for an answer that ran out of its TASK_TIMEOUT_MS.
+function deadlineError(limitMs) {
+  const err = new Error(`the answer took longer than ${limitMs}ms`);
+  err.source = 'openrouter';
+  err.code = 'ETIMEDOUT';
+  err.deadline = limitMs;
+  return err;
+}
+
+// One model call, cut short by the answer's deadline, and logged with its duration.
+async function timedCall(request, apiKey, messages, tools) {
+  const { deadline, limitMs, label = '' } = request;
+  const remaining = deadline ? deadline - Date.now() : config.ai.modelTimeoutMs;
+  if (remaining <= 0) throw deadlineError(limitMs);
+  const started = Date.now();
+  const { deadline: _d, limitMs: _l, label: _n, spend, ...body } = request;
+  try {
+    const reply = await openRouter.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
+    if (spend) addCost(spend, reply.cost);
+    console.log(`[agent] ${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`);
+    return reply;
+  } catch (err) {
+    console.warn(`[agent] ${label}${logSafe(request.model)} failed in ${Date.now() - started}ms: ${logSafe(err.message)}`);
+    if (deadline && Date.now() >= deadline && !err.response) throw deadlineError(limitMs);
+    throw err;
+  }
+}
+
 // The model may call list_files / read_file for up to MAX_TOOL_ROUNDS rounds, then must answer.
 // Models without tool support get one plain request with the file list and named files inlined.
 async function converse({ request, apiKey, system, history, question, repo }) {
-  const call = (messages, tools) => openRouter.complete({ ...request, apiKey, messages, tools });
+  const call = (messages, tools) => timedCall(request, apiKey, messages, tools);
   const messages = [{ role: 'system', content: system }, ...history, { role: 'user', content: question }];
 
   if (repo) {
@@ -223,12 +269,19 @@ async function replyWithError(task, comment, ctx, err) {
   }
 }
 
+// 👀 on the comment, so the commenter sees at once that the agent is on it. Best effort.
+async function acknowledge(task, comment, token) {
+  try {
+    if (task.platform === 'github') await github.addReaction(comment.repo, comment.commentId, { review: Boolean(comment.review) }, token);
+    else await gitlab.awardEmoji(comment.projectId, comment.kind, comment.number, comment.commentId);
+  } catch (err) {
+    console.warn(`[agent] task ${task.id}: could not add the eyes reaction: ${logSafe(err.message)}`);
+  }
+}
+
 // Everything after the trigger check. `ctx` collects the token and model as they become known,
 // for the error reply.
 async function answerComment(task, payload, comment, parsed, identity, access, ctx) {
-  if (!access.allowed) {
-    throw new AgentError('NOT_WHITELISTED', `${PLATFORM_NAMES[task.platform]} user ID ${identity.triggerUserId} is not whitelisted on this server.`);
-  }
   if (!parsed.prompt) throw new AgentError('NO_QUESTION', 'The comment starts with a trigger but asks nothing.');
 
   let diff = '';
@@ -238,6 +291,9 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     if (!ctx.installationId) throw new Error('payload has no GitHub App installation id');
     token = await github.installationToken(ctx.installationId);
     ctx.token = token;
+  }
+  await acknowledge(task, comment, token);
+  if (task.platform === 'github') {
     if (comment.pullUrl) diff = await github.getPullDiff(comment.pullUrl, token);
     history = await github.listIssueComments(comment.repo, comment.number, token);
   } else {
@@ -260,14 +316,25 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   );
   if (candidates.length === 0) {
     const orgNote = member ? `, the repository or ${identity.targetOrg}` : ` (repository and org keys need membership of ${identity.targetOrg})`;
-    throw new AgentError('NO_API_KEY', `No active ${config.ai.providerName} key for you${orgNote}.`);
+    throw new AgentError(
+      'NO_API_KEY',
+      `No active ${config.ai.providerName} key for you${orgNote}. Log in to the dashboard with ${PLATFORM_NAMES[task.platform]} and add your own key.`
+    );
   }
 
   const ref = await resolveRef(task.platform, comment, token);
   const repo = ref
     ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token })
     : null;
-  const request = { baseUrl: provider.url || 'https://openrouter.ai/api/v1', model };
+  const request = {
+    baseUrl: provider.url || 'https://openrouter.ai/api/v1',
+    model,
+    deadline: ctx.started + config.ai.taskTimeoutMs,
+    limitMs: config.ai.taskTimeoutMs,
+    label: `task ${task.id}: `,
+    spend: { cost: 0, complete: true },
+  };
+  console.log(`[agent] task ${task.id}: asking ${logSafe(model)} with ${candidates.length} key(s)`);
   const answer = await chatWithFallback(candidates, (key) =>
     converse({
       request,
@@ -279,7 +346,8 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     })
   );
 
-  await postReply(task.platform, comment, `${answer}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`, token);
+  const footer = `<sub>Model: \`${model}\`</sub>\n<sub>Cost: \`${formatCost(request.spend)}\`</sub>`;
+  await postReply(task.platform, comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
   return 'success';
 }
 
@@ -297,13 +365,14 @@ async function processTask(task) {
     return 'skipped';
   }
 
-  // Check the whitelist again: access may have been revoked while the task was queued. In an
-  // org nobody imported the app must not act at all, not even to say why.
+  // Check the org again: it may have been removed while the task was queued. In an org nobody
+  // imported the app must not act at all, not even to say why.
   const identity = task.platform === 'github' ? githubIdentity(payload) : gitlabIdentity(payload);
   const access = await whitelist.verify(task.platform, identity);
-  if (!access.allowed && !access.installation) throw new Error(`not whitelisted: ${access.reason}`);
+  if (!access.allowed) throw new Error(`not allowed: ${access.reason}`);
 
   const ctx = {
+    started: Date.now(),
     model: parsed.model,
     token: null,
     installationId: task.platform === 'github' ? identity.installationId || access.installation.installationId : null,
@@ -316,4 +385,4 @@ async function processTask(task) {
   }
 }
 
-module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };
+module.exports = { formatCost, processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };

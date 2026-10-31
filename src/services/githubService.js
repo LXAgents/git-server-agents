@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
+require('../http');
 const config = require('../config');
 
 const tokenCache = new Map();
@@ -53,6 +54,13 @@ async function postComment(repo, number, body, token) {
     { headers: headers(token) }
   );
   return data;
+}
+
+// Marks a comment as picked up with an emoji reaction. Issue and PR conversation comments use
+// the issues endpoint; inline review comments use the pulls one.
+async function addReaction(repo, commentId, { review = false, content = 'eyes' } = {}, token) {
+  const kind = review ? 'pulls' : 'issues';
+  await axios.post(`${repoUrl(repo)}/${kind}/comments/${commentId}/reactions`, { content }, { headers: headers(token) });
 }
 
 async function getPull(pullUrl, token) {
@@ -139,6 +147,7 @@ module.exports = {
   getPullDiff,
   getPull,
   postComment,
+  addReaction,
   listIssueComments,
   getRepoTree,
   getFileContent,

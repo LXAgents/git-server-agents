@@ -8,7 +8,7 @@ const profiles = require('../services/profileService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
 const owners = require('../services/ownerService');
-const { MEMBER } = require('../services/roles');
+const { FREE } = require('../services/roles');
 const { HttpError } = require('../errors');
 
 function platformParam(value) {
@@ -21,14 +21,14 @@ function requiredString(value, name) {
   return String(value).trim();
 }
 
-// Users are whitelisted as members only. The one owner per platform is set by
-// GITHUB_ADMIN_ID or GITLAB_ADMIN_ID, never through the API.
+// Users are added as free only. The one owner per platform is set by GITHUB_ADMIN_ID or
+// GITLAB_ADMIN_ID, never through the API.
 function roleParam(value, platform) {
-  if (value === undefined || value === null || value === '') return MEMBER;
+  if (value === undefined || value === null || value === '') return FREE;
   const role = String(value).trim().toLowerCase();
-  if (role === MEMBER) return role;
+  if (role === FREE) return role;
   const variable = platform === 'gitlab' ? 'GITLAB_ADMIN_ID' : 'GITHUB_ADMIN_ID';
-  throw new HttpError(400, `role must be ${MEMBER}: a platform has one owner, set by ${variable}`);
+  throw new HttpError(400, `role must be ${FREE}: a platform has one owner, set by ${variable}`);
 }
 
 function accountView(a, profile) {
@@ -147,7 +147,7 @@ async function createKey(req, res) {
     const accountType = platform;
     const accountId = requiredString(body.userId, 'userId');
     const account = await prisma.account.findUnique({ where: { type_id: { type: accountType, id: accountId } } });
-    if (!account) throw new HttpError(400, `${accountType} user ${accountId} is not whitelisted`);
+    if (!account) throw new HttpError(400, `${accountType} user ${accountId} has never logged in`);
     owner = { accountType, accountId };
   } else if (body.target === 'org') {
     const appInstallationId = requiredString(body.appInstallationId, 'appInstallationId');

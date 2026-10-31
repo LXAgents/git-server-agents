@@ -28,7 +28,10 @@ function githubTask(body, { org = true } = {}) {
 }
 
 function stubAll(t, { member = true, history = [], repository = null, collaborator = false, stored = 'openrouter/free' } = {}) {
-  const calls = { keys: [], posted: [], members: [], complete: [] };
+  const calls = { keys: [], posted: [], members: [], complete: [], reactions: [] };
+  t.mock.method(github, 'addReaction', async (repo, id, opts) => calls.reactions.push({ repo, id, ...opts }));
+  t.mock.method(gitlab, 'awardEmoji', async (projectId, kind, iid, noteId) => calls.reactions.push({ projectId, kind, iid, noteId }));
+  t.mock.method(console, 'log', () => {});
   t.mock.method(repoStore, 'findForEvent', async () => repository);
   t.mock.method(models, 'resolveModel', async () => ({ model: stored, source: 'user' }));
   t.mock.method(github, 'isCollaborator', async () => collaborator);
@@ -47,7 +50,7 @@ function stubAll(t, { member = true, history = [], repository = null, collaborat
   });
   t.mock.method(openRouter, 'complete', async (req) => {
     calls.complete.push(req);
-    return { content: 'The answer.' };
+    return { content: 'The answer.', cost: 0.000123 };
   });
   t.mock.method(console, 'info', () => {});
   return calls;
@@ -74,20 +77,10 @@ test('a trigger with no question gets a NO_QUESTION reply instead of silence', a
   assert.match(calls.posted[0].body, new RegExp(`${REPLY_MARKER}\n${ERROR_MARKER}$`));
 });
 
-test('a commenter who is not whitelisted, in an imported org, is told so', async (t) => {
-  const calls = stubAll(t);
-  t.mock.method(whitelist, 'verify', async () => ({ allowed: false, reason: 'user alice is not whitelisted', installation }));
-  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /not whitelisted/);
-  assert.equal(github.installationToken.mock.calls[0].arguments[0], '555');
-  assert.match(calls.posted[0].body, /`NOT_WHITELISTED`/);
-  assert.match(calls.posted[0].body, /GitHub user ID 1001/);
-  assert.equal(calls.complete.length, 0);
-});
-
 test('in an org nobody imported the agent stays silent', async (t) => {
   const calls = stubAll(t);
-  t.mock.method(whitelist, 'verify', async () => ({ allowed: false, reason: 'org acme is not whitelisted' }));
-  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /not whitelisted/);
+  t.mock.method(whitelist, 'verify', async () => ({ allowed: false, reason: 'org acme is not imported' }));
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /not imported/);
   assert.equal(calls.posted.length, 0);
   assert.equal(github.installationToken.mock.callCount(), 0);
 });
@@ -169,7 +162,7 @@ test('an org member gets the org keys as fallback, with history and the issue de
     ]
   );
   assert.equal(github.getRepoTree.mock.callCount(), 0);
-  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n${REPLY_MARKER}`));
+  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n${REPLY_MARKER}`));
 });
 
 test('a user who is not an org member never falls back to org keys', async (t) => {
@@ -285,4 +278,45 @@ test('a GitLab project member gets the repo keys', async (t) => {
   assert.deepEqual(gitlab.isProjectMember.mock.calls[0].arguments, [12, '8']);
   assert.equal(calls.keys[0].repo, repository);
   assert.equal(calls.keys[0].inst, null);
+});
+
+test('the comment gets an eyes reaction as soon as the agent picks it up', async (t) => {
+  const calls = stubAll(t);
+  await processTask(githubTask('@openrouter/free\nhi'));
+  assert.deepEqual(calls.reactions, [{ repo: 'acme/web', id: 900, review: false }]);
+});
+
+test('a failed reaction does not stop the answer', async (t) => {
+  const calls = stubAll(t);
+  t.mock.method(github, 'addReaction', async () => {
+    throw new Error('403 Resource not accessible');
+  });
+  t.mock.method(console, 'warn', () => {});
+  assert.equal(await processTask(githubTask('@openrouter/free\nhi')), 'success');
+  assert.equal(calls.posted.length, 1);
+});
+
+test('an answer that runs past TASK_TIMEOUT_MS is cut short with a TIMEOUT reply', async (t) => {
+  const config = require('../src/config');
+  t.mock.property(config.ai, 'taskTimeoutMs', 30);
+  const calls = stubAll(t);
+  t.mock.method(openRouter, 'complete', async ({ timeout }) => {
+    await new Promise((resolve) => setTimeout(resolve, timeout + 5));
+    const err = Object.assign(new Error(`timeout of ${timeout}ms exceeded`), { code: 'ECONNABORTED', source: 'openrouter' });
+    throw err;
+  });
+  t.mock.method(console, 'warn', () => {});
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), (err) => err.deadline === 30);
+  assert.match(calls.posted[0].body, /`TIMEOUT`/);
+  assert.match(calls.posted[0].body, /limit for one comment/);
+});
+
+test('the cost line adds up every model call of the answer, in USD', () => {
+  const { formatCost } = require('../src/services/agentService');
+  assert.equal(formatCost({ cost: 0, complete: true }), '0 USD');
+  assert.equal(formatCost({ cost: 0.000123, complete: true }), '0.000123 USD');
+  assert.equal(formatCost({ cost: 0.0215, complete: true }), '0.0215 USD');
+  assert.equal(formatCost({ cost: 0.0000001, complete: true }), '< 0.000001 USD');
+  assert.equal(formatCost({ cost: 0.002, complete: false }), '≥ 0.002 USD');
+  assert.equal(formatCost({ cost: 0, complete: false }), 'unknown');
 });

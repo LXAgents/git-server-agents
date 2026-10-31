@@ -9,6 +9,8 @@ node_modules/.bin/prisma generate
 node scripts/clear-usernames.js
 # Creates or updates the tables. It stops instead of dropping data on a destructive change.
 node_modules/.bin/prisma db push
+# Renames the "member" role of 1.10 and earlier to "free".
+node scripts/migrate-roles.js
 node prisma/seed.js
 
 exec "$@"

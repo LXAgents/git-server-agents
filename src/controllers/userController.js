@@ -1,4 +1,4 @@
-// Endpoints for a signed-in, whitelisted user (see middleware/userAuth). Users manage their
+// Endpoints for a logged-in user (see middleware/userAuth). Users manage their
 // own keys freely. Anything that changes or reveals an org asks the platform, every time,
 // whether the user owns that org; the answer is never stored.
 const prisma = require('../db');

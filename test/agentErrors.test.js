@@ -98,3 +98,14 @@ test('HTTP errors from OpenRouter are tagged as provider errors', async (t) => {
     return true;
   });
 });
+
+test('complete asks OpenRouter for usage and returns the cost it reports', async (t) => {
+  let sent;
+  t.mock.method(axios, 'post', async (_url, body) => {
+    sent = body;
+    return { data: { choices: [{ message: { content: 'hi' } }], usage: { cost: 0.0042 } } };
+  });
+  const reply = await openRouter.complete({ baseUrl: 'https://or.test', apiKey: 'k', model: 'm', messages: [] });
+  assert.deepEqual(sent.usage, { include: true });
+  assert.equal(reply.cost, 0.0042);
+});

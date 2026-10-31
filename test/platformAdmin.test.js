@@ -22,8 +22,9 @@ function call(path, { token, platform } = {}) {
 }
 
 async function cleanup() {
-  await prisma.account.deleteMany({ where: { type: 'github', id: '9999' } });
-  await prisma.account.deleteMany({ where: { type: 'gitlab', id: '8' } });
+  // Logging in creates an account, so every mock user this file signs in as is removed.
+  await prisma.account.deleteMany({ where: { type: 'github', id: { in: ['9999', '1001', '1002'] } } });
+  await prisma.account.deleteMany({ where: { type: 'gitlab', id: { in: ['7', '8'] } } });
 }
 
 test.before(async () => {
@@ -64,7 +65,7 @@ test('a configured admin ID becomes an owner on first sign-in, and nothing about
   assert.equal('username' in account, false);
 });
 
-test('an owner row for anyone but the configured ID counts as a member, and is set back', async () => {
+test('an owner row for anyone but the configured ID counts as free, and is set back', async () => {
   // alice (GitHub 1001) is not GITHUB_ADMIN_ID, so a stale owner row gives her nothing.
   await prisma.account.upsert({
     where: { type_id: { type: 'github', id: '1001' } },
@@ -73,21 +74,23 @@ test('an owner row for anyone but the configured ID counts as a member, and is s
   });
   try {
     const list = await (await call('/api/admin/accounts', { token: 'gh-stranger', platform: 'github' })).json();
-    assert.equal(list.find((a) => a.id === '1001').role, 'member');
+    assert.equal(list.find((a) => a.id === '1001').role, 'free');
     assert.equal((await call('/api/admin/accounts', { token: 'gh-alice', platform: 'github' })).status, 403);
     const alice = await prisma.account.findUnique({ where: { type_id: { type: 'github', id: '1001' } } });
-    assert.equal(alice.role, 'member');
+    assert.equal(alice.role, 'free');
   } finally {
     await prisma.account.deleteMany({ where: { type: 'github', id: '1001' } });
   }
 });
 
 test('the configured owner signing in leaves them the only owner on the platform', async () => {
-  await prisma.account.create({ data: { type: 'github', id: '1002', role: 'owner' } });
-  await prisma.account.create({ data: { type: 'gitlab', id: '7', role: 'owner' } });
+  // Logging in creates accounts now, so earlier tests may have left these rows.
+  for (const [type, id] of [['github', '1002'], ['gitlab', '7']]) {
+    await prisma.account.upsert({ where: { type_id: { type, id } }, create: { type, id, role: 'owner' }, update: { role: 'owner' } });
+  }
   try {
     // Make the next sign-in sync the database: stranger is demoted first.
-    await prisma.account.update({ where: { type_id: { type: 'github', id: '9999' } }, data: { role: 'member' } });
+    await prisma.account.update({ where: { type_id: { type: 'github', id: '9999' } }, data: { role: 'free' } });
     assert.equal((await call('/api/user/me', { token: 'gh-stranger', platform: 'github' })).status, 200);
     const owners = await prisma.account.findMany({ where: { type: 'github', role: 'owner' } });
     assert.deepEqual(owners.map((a) => a.id), ['9999']);
@@ -110,14 +113,14 @@ test('nobody can be made owner through the API', async () => {
 });
 
 test('a configured admin ID that was demoted in the database is made owner again', async () => {
-  await prisma.account.update({ where: { type_id: { type: 'github', id: '9999' } }, data: { role: 'member' } });
+  await prisma.account.update({ where: { type_id: { type: 'github', id: '9999' } }, data: { role: 'free' } });
   assert.equal((await call('/api/admin/accounts', { token: 'gh-stranger', platform: 'github' })).status, 200);
   const account = await prisma.account.findUnique({ where: { type_id: { type: 'github', id: '9999' } } });
   assert.equal(account.role, 'owner');
 });
 
 test('the owner list shows profiles read from the platform, for the session platform only', async () => {
-  await prisma.account.create({ data: { type: 'gitlab', id: '7' } });
+  await prisma.account.upsert({ where: { type_id: { type: 'gitlab', id: '7' } }, create: { type: 'gitlab', id: '7' }, update: {} });
   try {
     const github = await (await call('/api/admin/accounts', { token: 'gh-stranger', platform: 'github' })).json();
     assert.equal(github.every((a) => a.platform === 'github'), true);

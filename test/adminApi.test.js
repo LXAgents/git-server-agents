@@ -83,18 +83,18 @@ test('answers CORS preflight for the dashboard origin only', async () => {
 test('creates, lists and deletes accounts', async () => {
   const created = await call('POST', '/accounts', { body: { userId: `${P}-1` } });
   assert.equal(created.status, 201);
-  assert.equal((await created.json()).role, 'member');
+  assert.equal((await created.json()).role, 'free');
   assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-1` } })).status, 409);
   assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-3`, role: 'Admin' } })).status, 400);
   assert.equal((await call('POST', '/accounts', { body: {} })).status, 400);
-  // One owner per platform, set by GITHUB_ADMIN_ID: the API only adds members.
+  // One owner per platform, set by GITHUB_ADMIN_ID: the API only adds free users.
   assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-4`, role: 'OWNER' } })).status, 400);
-  assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-5`, role: 'member' } })).status, 201);
+  assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-5`, role: 'free' } })).status, 201);
 
   const list = await (await call('GET', '/accounts')).json();
   const row = list.find((a) => a.id === `${P}-1`);
   // No profile on the platform for this ID, so the ID stands in for the login.
-  assert.deepEqual([row.platform, row.login, row.role, row.keyCount, row.orgCount], ['github', `${P}-1`, 'member', 0, 0]);
+  assert.deepEqual([row.platform, row.login, row.role, row.keyCount, row.orgCount], ['github', `${P}-1`, 'free', 0, 0]);
   assert.equal('username' in row, false);
 
   // A GitLab session neither sees nor deletes GitHub accounts.

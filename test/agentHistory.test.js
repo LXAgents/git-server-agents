@@ -53,3 +53,9 @@ test('strips the model footer, and stays fast on bodies built to slow a regex do
   assert.equal(message.content, '<sub>Model: `x');
   assert.ok(Date.now() - started < 200);
 });
+
+test('the Model and Cost footer is left out of the history', () => {
+  const body = `Answer.\n\n<sub>Model: \`m/x\`</sub>\n<sub>Cost: \`0.0001 USD\`</sub>\n${REPLY_MARKER}`;
+  const [message] = buildHistory([{ id: 1, author: 'bot', body }]);
+  assert.deepEqual(message, { role: 'assistant', content: 'Answer.' });
+});

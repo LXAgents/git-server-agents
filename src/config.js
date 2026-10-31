@@ -53,10 +53,15 @@ module.exports = {
     openRouterUrl: trimSlash(process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1'),
     providerName: 'OpenRouter',
     maxDiffChars: Number(process.env.MAX_DIFF_CHARS) || 100000,
+    // One model call, and one whole answer (every call, tool and key together).
+    modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS) || 60_000,
+    taskTimeoutMs: Number(process.env.TASK_TIMEOUT_MS) || 240_000,
   },
   worker: {
     inline: process.env.WORKER_INLINE !== 'false',
     pollMs: Number(process.env.WORKER_POLL_MS) || 5000,
+    // How many comments are answered at the same time.
+    concurrency: Math.max(1, Number(process.env.WORKER_CONCURRENCY) || 4),
   },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')

@@ -10,7 +10,7 @@ model Account {
   type          String
   id            String
   // Lower case. "owner" runs the deployment; everyone else is "member" for now.
-  role          String            @default("member")
+  role          String            @default("free")
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   keys          AccountKey[]

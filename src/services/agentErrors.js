@@ -12,7 +12,6 @@ class AgentError extends Error {
 
 const CODES = {
   NO_QUESTION: { title: 'No question to answer', retry: 'Add your question after the trigger, on the same line or the next ones.' },
-  NOT_WHITELISTED: { title: 'You are not whitelisted', retry: 'Retrying will not help. Ask the owner to whitelist your user ID first.' },
   NO_API_KEY: { title: 'No API key to use', retry: 'Retrying will not help. Add an OpenRouter key on the dashboard’s API keys page first.' },
   INVALID_API_KEY: { title: 'The API key was refused', retry: 'Retrying will not help. Replace the key on the dashboard: it is invalid, revoked or disabled.' },
   INSUFFICIENT_CREDITS: { title: 'The API key is out of credits', retry: 'Retrying will not help. Add credits at openrouter.ai/settings/credits, or use a `:free` model.' },
@@ -88,7 +87,11 @@ function result(code, status, detail, { quoted = false, note = '', resetAt = nul
 function classifyProvider(e, now) {
   const response = e.response;
   if (!response) {
-    if (TIMEOUT_CODES.has(e.code) || /timeout/i.test(e.message)) return result('TIMEOUT', null, 'No answer within 120 seconds.');
+    if (e.deadline) return result('TIMEOUT', null, `The answer took longer than ${Math.round(e.deadline / 1000)} seconds, the limit for one comment.`);
+    if (TIMEOUT_CODES.has(e.code) || /timeout/i.test(e.message)) {
+      const ms = e.config && e.config.timeout;
+      return result('TIMEOUT', null, ms ? `No answer within ${Math.round(ms / 1000)} seconds.` : 'The model did not answer in time.');
+    }
     return result('PROVIDER_UNAVAILABLE', null, 'OpenRouter could not be reached.');
   }
   const message = providerMessage(response.data);

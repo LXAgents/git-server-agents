@@ -1,7 +1,7 @@
-// Account roles, stored in lower case. Only "owner" carries rights today; more roles can be
-// added here later.
+// Account roles, stored in lower case. "owner" is the platform's one owner (GITHUB_ADMIN_ID /
+// GITLAB_ADMIN_ID); everyone else who signs in is "free". More roles can be added here later.
 const OWNER = 'owner';
-const MEMBER = 'member';
-const ROLES = [OWNER, MEMBER];
+const FREE = 'free';
+const ROLES = [OWNER, FREE];
 
-module.exports = { OWNER, MEMBER, ROLES };
+module.exports = { OWNER, FREE, ROLES };

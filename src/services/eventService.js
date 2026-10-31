@@ -34,6 +34,8 @@ function githubComment(event, body) {
     return {
       ...base,
       kind: 'pull_request',
+      // An inline review comment: its reactions live under /pulls/comments.
+      review: true,
       number: body.pull_request.number,
       pullUrl: body.pull_request.url,
       headSha: (body.pull_request.head && body.pull_request.head.sha) || null,

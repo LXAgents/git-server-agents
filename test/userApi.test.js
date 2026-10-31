@@ -50,7 +50,7 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test('signs in with the platform token and requires a whitelisted user', async () => {
+test('signs in with the platform token; anyone with a GitHub or GitLab account gets in as free', async () => {
   const me = await call('GET', '/me', { token: 'gh-alice' });
   assert.equal(me.status, 200);
   // The profile is GitHub's answer; only the role comes from our database.
@@ -60,15 +60,20 @@ test('signs in with the platform token and requires a whitelisted user', async (
     login: 'alice',
     name: 'Alice Liddell',
     avatarUrl: 'https://avatars.example/1001',
-    role: 'member',
+    role: 'free',
   });
   assert.equal((await call('GET', '/me')).status, 401);
   assert.equal((await call('GET', '/me', { token: 'bogus' })).status, 401);
-  assert.equal((await call('GET', '/me', { token: 'gh-stranger' })).status, 403);
+  // No whitelist: logging in creates a free account.
+  const stranger = await call('GET', '/me', { token: 'gh-stranger' });
+  assert.equal(stranger.status, 200);
+  assert.equal((await stranger.json()).role, 'free');
+  assert.equal((await prisma.account.findUnique({ where: { type_id: { type: 'github', id: '9999' } } })).role, 'free');
+  await prisma.account.delete({ where: { type_id: { type: 'github', id: '9999' } } });
   assert.equal((await call('GET', '/me', { token: 'gh-alice', platform: 'svn' })).status, 400);
 });
 
-test('lets any whitelisted user manage only their own keys', async () => {
+test('lets any logged-in user manage only their own keys', async () => {
   const created = await call('POST', '/keys', { token: 'gh-bob', body: { apiKey: 'sk-bob-0001', priority: 4 } });
   assert.equal(created.status, 201);
   const key = await created.json();
