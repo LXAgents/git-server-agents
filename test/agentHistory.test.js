@@ -54,8 +54,16 @@ test('strips the model footer, and stays fast on bodies built to slow a regex do
   assert.ok(Date.now() - started < 200);
 });
 
-test('the Model and Cost footer is left out of the history', () => {
-  const body = `Answer.\n\n<sub>Model: \`m/x\`</sub>\n<sub>Cost: \`0.0001 USD\`</sub>\n${REPLY_MARKER}`;
+test('the Model, Cost and User footer is left out of the history', () => {
+  const body = `Answer.\n\n<sub>Model: \`m/x\`</sub>\n<sub>Cost: \`0.0001 USD\`</sub>\n<sub>User: \`@alice\`</sub>\n${REPLY_MARKER}`;
   const [message] = buildHistory([{ id: 1, author: 'bot', body }]);
   assert.deepEqual(message, { role: 'assistant', content: 'Answer.' });
+});
+
+test("replies with the pre-1.11.1 marker still count as the agent's own", () => {
+  const body = 'Old answer.\n\n<sub>Model: `m/x`</sub>\n<!-- git-server-agents -->';
+  const errorBody = 'x\n<!-- git-server-agents -->\n<!-- git-server-agents:error -->';
+  assert.deepEqual(buildHistory([{ id: 1, author: 'bot', body }, { id: 2, author: 'bot', body: errorBody }]), [
+    { role: 'assistant', content: 'Old answer.' },
+  ]);
 });

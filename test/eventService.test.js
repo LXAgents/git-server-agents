@@ -47,3 +47,15 @@ test('recognises a GitLab merge request note', () => {
     { kind: 'pull_request', number: 4, projectId: 12 }
   );
 });
+
+test('ignores replies that carry the new or the pre-1.11.1 marker', () => {
+  for (const marker of ['<!-- LXAgents -->', '<!-- git-server-agents -->']) {
+    const comment = toComment('github', 'issue_comment', {
+      action: 'created',
+      repository,
+      issue: { number: 3, title: 'Bug' },
+      comment: { body: `@agents hi\n${marker}`, user: { type: 'User' } },
+    });
+    assert.equal(comment, null);
+  }
+});

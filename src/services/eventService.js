@@ -3,9 +3,26 @@
 
 // Every reply carries this marker, so the agent never answers itself even when its
 // token belongs to a whitelisted user.
-const REPLY_MARKER = '<!-- git-server-agents -->';
+const REPLY_MARKER = '<!-- LXAgents -->';
 // Error replies carry this as well, so they stay out of the conversation history.
-const ERROR_MARKER = '<!-- git-server-agents:error -->';
+const ERROR_MARKER = '<!-- LXAgents:error -->';
+// Replies posted before 1.11.1 carry the old markers and must still be recognised.
+const LEGACY_REPLY_MARKER = '<!-- git-server-agents -->';
+const LEGACY_ERROR_MARKER = '<!-- git-server-agents:error -->';
+
+function isReply(body) {
+  const text = String(body || '');
+  return text.includes(REPLY_MARKER) || text.includes(LEGACY_REPLY_MARKER);
+}
+
+function isErrorReply(body) {
+  const text = String(body || '');
+  return text.includes(ERROR_MARKER) || text.includes(LEGACY_ERROR_MARKER);
+}
+
+function removeMarkers(body) {
+  return String(body || '').replace(REPLY_MARKER, '').replace(LEGACY_REPLY_MARKER, '');
+}
 
 function githubComment(event, body) {
   if (body.action !== 'created' || !body.comment || !body.repository) return null;
@@ -83,8 +100,8 @@ function gitlabComment(event, body) {
 
 function toComment(platform, event, payload) {
   const comment = platform === 'github' ? githubComment(event, payload) : gitlabComment(event, payload);
-  if (!comment || comment.isBot || comment.commentBody.includes(REPLY_MARKER)) return null;
+  if (!comment || comment.isBot || isReply(comment.commentBody)) return null;
   return comment;
 }
 
-module.exports = { toComment, REPLY_MARKER, ERROR_MARKER };
+module.exports = { toComment, isReply, isErrorReply, removeMarkers, REPLY_MARKER, ERROR_MARKER };
