@@ -81,3 +81,16 @@ status: in-progress
   `CORS_ORIGINS` (default `http://localhost:5173`); Prisma P2025/P2002/P2003 map to
   404/409/400 in the app error handler.
 - 45 tests pass on SQLite.
+
+### Task 6 — feat/user-api
+
+- `src/routes/user.js` at `/api/user` behind `userAuth`: `GET /me`; own keys
+  `GET/POST/DELETE /keys`; `GET /orgs` (imported orgs the caller owns now),
+  `GET /orgs/importable` (owned orgs with `importable` and `reason`),
+  `POST /orgs/import`, `DELETE /orgs/:id`; org keys `GET/POST/DELETE /orgs/:id/keys`.
+- Import is the only way an org is created: the caller must own it on the platform; on
+  GitHub the App must be installed (its installation id is stored). The canonical name
+  comes from the platform.
+- Every org route re-asks the platform whether the caller owns the org; an org on another
+  platform answers 404.
+- 51 tests pass on SQLite and on PostgreSQL 16.
