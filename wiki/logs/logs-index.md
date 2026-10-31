@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.11.1](1/11/1/CHANGELOG.md) | User line in the reply footer, LXAgents reply marker | `CHANGELOG.md` |
 | [1.11.0](1/11/0/CHANGELOG.md) | Eyes on pickup, cost line, parallel answers with time limits, open login, free role | `CHANGELOG.md` |
 | [1.10.0](1/10/0/CHANGELOG.md) | Error replies with codes, PAT sign-in refused, scoped package name | `CHANGELOG.md` |
 | [1.9.0](1/9/0/CHANGELOG.md) | Operator sign-in removed; owners run the admin API | `CHANGELOG.md` |
