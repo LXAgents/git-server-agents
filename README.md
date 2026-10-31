@@ -108,7 +108,7 @@ the same way in `src/db.js`.
 | `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
-| `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that become `owner` when they sign in |
+| `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | The **one** numeric GitHub or GitLab user ID that owns that platform (empty: no owner). A comma list stops the server at start |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
 ## Run with Docker
@@ -187,6 +187,14 @@ are read from GitHub (`GET /user/{id}`) or GitLab (`GET /users/{id}`) when neede
 memory for 10 minutes. Roles are lower case: `owner` runs this deployment, everyone else is
 `member` (the default). More roles can be added later.
 
+**Each platform has one owner at most:** the user in `GITHUB_ADMIN_ID` (GitHub) or
+`GITLAB_ADMIN_ID` (GitLab).
+- The database's `owner` role only mirrors that setting. When that user signs in they become
+  `owner`, and any other account of the platform still marked `owner` goes back to `member`.
+- Until then, such an account already counts as a member.
+- Nobody can be made owner through the API. To hand over ownership, change the variable and
+  restart.
+
 Every `/api/admin` request works on **one platform**, named by `X-Platform`. A GitHub session
 lists and changes only GitHub users, orgs, repositories and keys, and a GitLab session only
 GitLab ones.
@@ -199,8 +207,8 @@ GitLab ones.
 
 Users are matched by numeric user ID, never by login, because a login can be renamed and then
 claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the GitLab
-profile page. A user listed in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` is whitelisted as `owner`
-the first time they sign in, and stays `owner`. `/api/user/me` returns
+profile page. The user in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` is whitelisted as `owner` the
+first time they sign in, and stays `owner` while the setting names them. `/api/user/me` returns
 `{ platform, id, login, name, avatarUrl, role }`.
 
 Upgrading from 1.6 or earlier: 1.7.0 drops the stored `username` column.
@@ -227,7 +235,7 @@ once because every key would fail the same way.
 | Method | Path | Body |
 |---|---|---|
 | GET | `/accounts` | |
-| POST | `/accounts` | `{ userId, role? }` on the session's platform; `role` is `member` (default) or `owner` |
+| POST | `/accounts` | `{ userId }` on the session's platform, always as `member` (`role: "owner"` is refused: the owner comes from `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID`) |
 | DELETE | `/accounts/:platform/:userId` | `:platform` must be the session's; also removes orgs the user imported, and their keys |
 | GET | `/orgs` | |
 | DELETE | `/orgs/:id` | |
