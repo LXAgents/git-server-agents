@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.4.2](1/4/2/CHANGELOG.md) | Log injection fix: request values stay on one log line | `CHANGELOG.md` |
 | [1.4.1](1/4/1/CHANGELOG.md) | SonarCloud fixes: linear regexes, no install scripts, explicit Docker copy | `CHANGELOG.md` |
 | [1.4.0](1/4/0/CHANGELOG.md) | Chat history, repository file tools, model required, org keys for members only | `CHANGELOG.md` |
 | [1.3.0](1/3/0/CHANGELOG.md) | OAuth sign-in, client ID naming, admin user IDs | `CHANGELOG.md` |
