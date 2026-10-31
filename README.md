@@ -108,7 +108,7 @@ the same way in `src/db.js`.
 | `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
-| `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that get admin control when they sign in |
+| `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that become `owner` when they sign in |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
 ## Run with Docker
@@ -179,18 +179,33 @@ still be whitelisted, and org ownership is still checked live.
 
 Users are whitelisted only by the operator. Orgs are created only by **import**: a
 whitelisted user who owns the org on the platform imports it from the dashboard or the
-user API. Roles are never stored; ownership is asked of GitHub or GitLab on every org change.
+user API. Org and repository rights are never stored; they are asked of GitHub or GitLab on
+every change.
+
+We store only a user's platform, numeric ID and **role**. Their login, display name and avatar
+are read from GitHub (`GET /user/{id}`) or GitLab (`GET /users/{id}`) when needed, and kept in
+memory for 10 minutes. Roles are lower case: `owner` runs this deployment, everyone else is
+`member` (the default). More roles can be added later.
+
+Every `/api/admin` request works on **one platform**, named by `X-Platform`. A GitHub session
+lists and changes only GitHub users, orgs, repositories and keys, and a GitLab session only
+GitLab ones.
 
 | Who | How they authenticate | What they can do |
 |---|---|---|
-| Operator | `Authorization: Bearer $ADMIN_TOKEN` on `/api/admin` | Whitelist and remove users; list and delete orgs; add and delete any key |
-| Admin user | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`, when their user ID is in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` | The same as the operator |
+| Operator | `Authorization: Bearer $ADMIN_TOKEN` + `X-Platform: github\|gitlab` on `/api/admin` | Whitelist and remove users; list and delete orgs and repositories; add and delete any key, on that platform |
+| Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`, when their account's role is `owner` | The same as the operator, on their platform |
 | Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
 
-Admin users are matched by numeric user ID, never by login, because a login can be renamed and
-then claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the
-GitLab profile page. An admin user is whitelisted automatically the first time they sign in, and
-`/api/user/me` returns `isAdmin: true` for them.
+Users are matched by numeric user ID, never by login, because a login can be renamed and then
+claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the GitLab
+profile page. A user listed in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` is whitelisted as `owner`
+the first time they sign in, and stays `owner`. `/api/user/me` returns
+`{ platform, id, login, name, avatarUrl, role }`.
+
+Upgrading from 1.6 or earlier: 1.7.0 drops the stored `username` column.
+`scripts/clear-usernames.js` empties it before `prisma db push` (the Docker entrypoint and
+`npm run db:push` run it), so the push doesn't stop on a data-loss warning.
 
 An org owner is GitHub org role `admin` (or the user's own account), or GitLab access
 level Owner (50) on the top-level group. A GitHub token needs `read:org`; a GitLab token
@@ -212,14 +227,14 @@ once because every key would fail the same way.
 | Method | Path | Body |
 |---|---|---|
 | GET | `/accounts` | |
-| POST | `/accounts` | `{ platform, userId, username }` |
-| DELETE | `/accounts/:platform/:userId` | (also removes orgs the user imported, and their keys) |
+| POST | `/accounts` | `{ userId, role? }` on the session's platform; `role` is `member` (default) or `owner` |
+| DELETE | `/accounts/:platform/:userId` | `:platform` must be the session's; also removes orgs the user imported, and their keys |
 | GET | `/orgs` | |
 | DELETE | `/orgs/:id` | |
 | GET | `/repos` | |
 | DELETE | `/repos/:id` | (also removes the repository's keys and model) |
 | GET | `/keys` | |
-| POST | `/keys` | `{ target: "user", platform, userId, apiKey, priority? }` or `{ target: "org", appInstallationId, apiKey, priority? }` |
+| POST | `/keys` | `{ target: "user", userId, apiKey, priority? }` or `{ target: "org", appInstallationId, apiKey, priority? }` |
 | DELETE | `/keys/:id` | |
 
 ### User API (`/api/user`)
