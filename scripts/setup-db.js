@@ -1,6 +1,6 @@
 // Copies the schema for the current environment to prisma/schema.prisma.
 // PROD=prod selects PostgreSQL; anything else (including unset) selects SQLite.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const fs = require('fs');
 const path = require('path');
 
