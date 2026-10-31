@@ -3,6 +3,8 @@ const { verifyGithubSignature, verifyGitlabToken } = require('../services/signat
 const { githubIdentity, gitlabIdentity } = require('../services/identityService');
 const whitelist = require('../services/whitelistService');
 const tasks = require('../services/taskService');
+const { toComment } = require('../services/eventService');
+const { parseComment } = require('../services/commentParser');
 const { logSafe } = require('../utils/strings');
 
 // Without a secret anyone could forge a whitelisted sender, so production refuses to run
@@ -13,10 +15,22 @@ function checkAuthenticity(authentic, secret) {
   return true;
 }
 
+// A trigger comment from someone who isn't whitelisted, in an org that is imported.
+function isTriggerInImportedOrg(platform, event, payload, result) {
+  if (!result.installation) return false;
+  const comment = toComment(platform, event, payload);
+  if (!comment) return false;
+  const parsed = parseComment(comment.commentBody);
+  return Boolean(parsed.auto || parsed.model);
+}
+
 async function accept(res, platform, event, identity, payload) {
   const result = await whitelist.verify(platform, identity);
   if (!result.allowed) {
     console.warn(`[webhook:${platform}] 403 ${logSafe(event)}: ${logSafe(result.reason)}`);
+    // The agent replies NOT_WHITELISTED there, so the commenter knows why nothing answers.
+    // Orgs nobody imported get nothing: the apps are public.
+    if (isTriggerInImportedOrg(platform, event, payload, result)) await tasks.enqueue(platform, event, payload);
     // The reason stays in the server log; telling the caller which check failed helps probing.
     return res.status(403).json({ error: 'Unauthorized' });
   }

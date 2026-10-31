@@ -24,7 +24,8 @@ async function verify(platform, identity) {
     where: { type_id: { type: platform, id: triggerUserId } },
   });
   if (!account) {
-    return { allowed: false, reason: `user ${identity.triggerUser || triggerUserId} is not whitelisted` };
+    // The org is imported, so the agent may reply there to say so (see agentService).
+    return { allowed: false, reason: `user ${identity.triggerUser || triggerUserId} is not whitelisted`, installation };
   }
 
   return { allowed: true, installation, account };
