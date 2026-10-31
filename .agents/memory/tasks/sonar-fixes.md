@@ -27,6 +27,6 @@ status: done
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/sonar-fixes` | `.agents/` | |
-| 2 | Sonar fixes | Regexes, Docker, CI, GitLab path, worker, test fake | git-server-agents | `fix/sonar-fixes` | `src/`, `test/`, `Dockerfile`, `.github/` | |
-| 3 | Release | 1.4.1 changelog and version | git-server-agents | `release/1.4.1` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/sonar-fixes` | `.agents/` | #29 |
+| 2 | Sonar fixes | Regexes, Docker, CI, GitLab path, worker, test fake | git-server-agents | `fix/sonar-fixes` | `src/`, `test/`, `Dockerfile`, `.github/` | #30 |
+| 3 | Release | 1.4.1 changelog and version | git-server-agents | `release/1.4.1` | `wiki/logs/`, `package.json` | #31 |

@@ -1,7 +1,7 @@
 ---
 name: sonar-log-injection
 description: Task record for the SonarCloud log-injection finding on the server (1.4.2).
-status: in-progress
+status: done
 ---
 
 # Log injection fix
@@ -21,6 +21,6 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/sonar-log-injection` | `.agents/` | |
-| 2 | Log injection | `logSafe()` and its uses, tests | git-server-agents | `fix/sonar-log-injection` | `src/`, `test/` | |
-| 3 | Release | 1.4.2 changelog and version | git-server-agents | `release/1.4.2` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/sonar-log-injection` | `.agents/` | #32 |
+| 2 | Log injection | `logSafe()` and its uses, tests | git-server-agents | `fix/sonar-log-injection` | `src/`, `test/` | #33 |
+| 3 | Release | 1.4.2 changelog and version | git-server-agents | `release/1.4.2` | `wiki/logs/`, `package.json` | #34 |
