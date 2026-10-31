@@ -2,19 +2,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
+const { startMockPlatform } = require('./helpers/mockPlatform');
 
-process.env.ADMIN_TOKEN = 'admin-test-token';
 process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
 process.env.CORS_ORIGINS = 'http://dashboard.test';
-
-const prisma = require('../src/db');
-const { createApp } = require('../src/app');
+// The owners: stranger (GitHub 9999) and dave (GitLab 8), signed in with their own tokens.
+process.env.GITHUB_ADMIN_ID = '9999';
+process.env.GITLAB_ADMIN_ID = '8';
+const OWNER_TOKENS = { github: 'gh-stranger', gitlab: 'gl-dave' };
 
 const P = 'adminapi';
+let mock;
+let prisma;
 let server;
 let base;
 
-function call(method, path, { body, token = 'admin-test-token', platform = 'github', headers = {} } = {}) {
+function call(method, path, { body, platform = 'github', token = OWNER_TOKENS[platform], headers = {} } = {}) {
   return fetch(`${base}/api/admin${path}`, {
     method,
     headers: {
@@ -28,27 +31,45 @@ function call(method, path, { body, token = 'admin-test-token', platform = 'gith
 }
 
 test.before(async () => {
+  mock = await startMockPlatform();
+  prisma = require('../src/db');
+  const { createApp } = require('../src/app');
   server = createApp().listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
 });
 
 test.after(async () => {
   server.close();
+  mock.close();
   await prisma.account.deleteMany({ where: { id: { startsWith: P } } });
+  await prisma.account.deleteMany({ where: { OR: [{ type: 'github', id: '9999' }, { type: 'gitlab', id: '8' }] } });
   await prisma.$disconnect();
 });
 
-test('rejects a missing or wrong token with 401', async () => {
-  // Without X-Platform there is no platform token to try, so anything but ADMIN_TOKEN is 401.
-  assert.equal((await call('GET', '/accounts', { token: null, platform: null })).status, 401);
-  assert.equal((await call('GET', '/accounts', { token: 'wrong', platform: null })).status, 401);
-  const bare = await fetch(`${base}/api/admin/accounts`, { headers: { authorization: 'admin-test-token', 'x-platform': 'gitlab' } });
-  assert.equal(bare.status, 200);
+test("opens only for the platform owner's own token", async () => {
+  assert.equal((await call('GET', '/accounts')).status, 200);
+  assert.equal((await call('GET', '/accounts', { platform: 'gitlab' })).status, 200);
+  // No X-Platform, no token, a bad token, or a valid user who is not the owner.
+  assert.equal((await call('GET', '/accounts', { platform: null, token: 'gh-stranger' })).status, 401);
+  assert.equal((await call('GET', '/accounts', { token: null })).status, 401);
+  assert.equal((await call('GET', '/accounts', { token: 'wrong' })).status, 401);
+  assert.equal((await call('GET', '/accounts', { platform: 'bitbucket', token: 'gh-stranger' })).status, 400);
+  await prisma.account.create({ data: { type: 'github', id: '1001' } });
+  try {
+    assert.equal((await call('GET', '/accounts', { token: 'gh-alice' })).status, 403);
+  } finally {
+    await prisma.account.deleteMany({ where: { type: 'github', id: '1001' } });
+  }
 });
 
-test('the operator token must name the platform it works on', async () => {
-  assert.equal((await call('GET', '/accounts', { platform: null })).status, 400);
-  assert.equal((await call('GET', '/accounts', { platform: 'bitbucket' })).status, 400);
+test('an ADMIN_TOKEN left in the environment opens nothing', async () => {
+  process.env.ADMIN_TOKEN = 'left-over';
+  try {
+    assert.equal((await call('GET', '/accounts', { token: 'left-over', platform: null })).status, 401);
+    assert.equal((await call('GET', '/accounts', { token: 'left-over' })).status, 401);
+  } finally {
+    delete process.env.ADMIN_TOKEN;
+  }
 });
 
 test('answers CORS preflight for the dashboard origin only', async () => {

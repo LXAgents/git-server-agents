@@ -1,4 +1,4 @@
-// Owner and operator endpoints. Whitelisting users happens only here; orgs are never created
+// Owner endpoints. Whitelisting users happens only here; orgs are never created
 // here, because they come in by import (see userController).
 // Every endpoint works on the session's platform only (req.admin.platform, see adminAuth):
 // rows from the other platform are neither listed nor changed.
