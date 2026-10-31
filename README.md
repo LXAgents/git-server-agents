@@ -17,13 +17,16 @@ all come from the REST APIs.
    HMAC or `X-Gitlab-Token`). Bad signature: **401**.
 2. The org and the triggering user are looked up in `AppInstallation` and `Account`.
    Either missing: **403**. The apps are public, so nothing is trusted that was not added
-   by hand.
+   by hand. When only the user is missing and the comment is a trigger, the task is still
+   queued so the agent can reply `NOT_WHITELISTED`. Orgs nobody imported get no reply at all.
 3. The payload is stored as a `pending` `AgentTask` and the request returns **200** at once.
 4. The worker claims the task and skips it unless line 1 starts with `@agents` or names a
    model (see below). It
    re-checks the whitelist, then fetches the diff (PRs and MRs only) and the last 30 comments.
    It calls OpenRouter and posts the reply. The task ends as `success`, `skipped` or `failed`
-   (see `errorLog`).
+   (see `errorLog`). A failed task also gets an error reply on the thread (see below).
+5. When the worker starts, tasks left in `processing` for over 30 minutes (by a restart or a
+   redeploy) go back to `pending`.
 
 ## Asking the agent
 
@@ -45,6 +48,39 @@ Review this diff.
 - **`@vendor/model`** uses that model, whatever is stored.
 - A comment that starts any other way gets no answer, and neither does one whose first line is a
   user mention such as `@alice`.
+
+### When the agent can't answer
+
+A trigger never goes unanswered. If anything fails, the agent replies with a code, the HTTP
+status when there is one, what happened (OpenRouter's or the platform's own message), whether
+retrying helps, and the task id. For a rate limit it gives the time the limit lifts. When
+several keys were tried, it lists each key's owner type and status, but never the key itself.
+Error replies are left out of the conversation history.
+
+| Code | Status | Meaning | Retry |
+|---|---|---|---|
+| `NO_QUESTION` | | The trigger asks nothing | Add the question |
+| `NOT_WHITELISTED` | | The commenter isn't whitelisted (in an imported org) | No: ask the owner |
+| `NO_API_KEY` | | No active OpenRouter key the commenter may use | No: add a key |
+| `INVALID_API_KEY` | 401 | The key is invalid, revoked or disabled | No: replace the key |
+| `INSUFFICIENT_CREDITS` | 402 | The key's balance has run out | No: add credits, or use a `:free` model |
+| `CONTENT_FLAGGED` | 403 | Moderation refused the input | No: rephrase |
+| `MODEL_NOT_FOUND` | 404 | The model id is wrong or has no provider | No: fix the id |
+| `BAD_REQUEST` | 400 | OpenRouter rejected the request | No: try another model |
+| `TIMEOUT` | 408 | No answer within 120 seconds | Once, then pick a faster model |
+| `RATE_LIMITED` | 429 | The rate limit or the free-model daily limit was hit | After the time given |
+| `PROVIDER_UNAVAILABLE` | 502, 503 | The model's provider is down or busy | In a few minutes |
+| `PROVIDER_ERROR` | 500 | The model's provider failed | In a few minutes |
+| `EMPTY_RESPONSE` | | The model returned no text | Once, or another model |
+| `PLATFORM_ERROR` | any | GitHub or GitLab refused a request | In a few minutes; check the App's permissions |
+| `INTERNAL_ERROR` | | Anything else; the details are only in the server log | Once, then give the owner the task id |
+
+OpenRouter sometimes answers HTTP 200 with an error in the body. The agent reads the real
+status from it.
+
+If no reply appears at all, the event never reached the worker. On GitHub, check the App's
+**Advanced → Recent deliveries**: a 401 there is a bad webhook secret, and a 403 for a comment
+in an org nobody imported is expected.
 
 - **Conversation:** the last 30 comments on the issue, PR or MR are sent as chat history.
   The agent's own replies count as `assistant`, everyone else as `user` with their `@login`.
@@ -150,7 +186,8 @@ container health check.
 ## Signing in to the dashboard
 
 Users sign in with **Continue with GitHub** or **Continue with GitLab**. A button shows only
-when that platform's client ID and secret are set. Pasting a personal access token still works.
+when that platform's client ID and secret are set. Personal access tokens are refused with
+**401**: tokens starting `ghp_`, `github_pat_` or `glpat-` can't sign in.
 
 1. On the GitHub App, set the callback URL to `<PUBLIC_URL>/api/auth/github/callback`, generate
    a client secret, and give it the **Members: read** organization permission, which the owner
@@ -171,7 +208,7 @@ How it works:
   once. Dashboards older than 1.3.0 expect the token in the fragment and can't use this server's
   OAuth sign-in.
 
-The token is then used like a personal access token. The server never stores it, the user must
+The token is then sent as `Authorization: Bearer`. The server never stores it, the user must
 still be whitelisted, and org ownership is still checked live.
 
 ## Whitelisting and API keys
@@ -201,7 +238,7 @@ GitLab ones.
 | Who | How they authenticate | What they can do |
 |---|---|---|
 | Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`; the one user in `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID` | Whitelist and remove users; list and delete orgs and repositories; add and delete any key, on their platform |
-| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
+| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
 
 Users are matched by numeric user ID, never by login, because a login can be renamed and then
 claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the GitLab
@@ -295,8 +332,8 @@ src/server.js    entry point (server + inline worker)
 src/worker.js    queue worker (`npm run worker` to run alone)
 src/routes/      webhook, auth, admin and user routes
 src/controllers/ webhook, auth, admin, user and repository controllers
-src/middleware/  admin token, platform-token sign-in, CORS
-src/services/    signature, identity, whitelist, task, comment parser, GitHub, GitLab,
+src/middleware/  owner and platform-token sign-in, CORS
+src/services/    signature, identity, whitelist, task, comment parser, agent errors, GitHub, GitLab,
                  platform roles, OAuth, OpenRouter, model, key, key store, repository
                  and crypto services
 test/            node:test suites (`npm test`)
