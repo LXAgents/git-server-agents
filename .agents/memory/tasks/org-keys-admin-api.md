@@ -47,3 +47,15 @@ status: in-progress
 - `scripts/manage.js add-org-key <orgName> <apiKey> [priority] [provider] [--platform]`;
   `list` shows whether a key belongs to a user or an org. Key creation shared by both commands.
 - `db:push` on SQLite applies cleanly over 1.0.0 data; 26 existing tests still pass.
+
+### Task 3 — feat/key-fallback
+
+- `keyService.getProviderKeys(providerName, account, appInstallation)` replaces
+  `getProviderKey`: all active decrypted keys, user's first then the org's, each by
+  priority desc. A row that fails to decrypt is logged and skipped.
+- `agentService.chatWithFallback` tries each key in turn and logs
+  `<owner> key <id> failed (<status>), falling back to next...`; the last error is thrown
+  when all fail. 400/404 stop at once (they fail identically on every key).
+- Behaviour change: the 1.0.0 fallback to the org owner's personal keys is gone.
+- Tests: ordering, inactive and unreadable rows, fallback on 401/402/429/5xx and network
+  errors, last-error rethrow, no fallback on 400. 34 tests pass on SQLite.

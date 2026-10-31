@@ -26,6 +26,31 @@ function buildSystemPrompt(comment, diff) {
   return lines.join('\n');
 }
 
+// 400 and 404 mean the request itself is wrong (bad model id, malformed body), so every
+// other key would fail the same way. Anything else (401, 402, 403, 429, 5xx, timeouts,
+// network errors, empty replies) is worth retrying with the next key.
+function isKeySpecific(err) {
+  const status = err.response && err.response.status;
+  return status !== 400 && status !== 404;
+}
+
+async function chatWithFallback(candidates, request) {
+  let lastError;
+  for (const [index, key] of candidates.entries()) {
+    try {
+      return await openRouter.chat({ ...request, apiKey: key.apiKey });
+    } catch (err) {
+      lastError = err;
+      const status = (err.response && err.response.status) || err.code || 'error';
+      if (!isKeySpecific(err)) throw err;
+      if (index < candidates.length - 1) {
+        console.warn(`[agent] ${key.owner} key ${key.id} failed (${status}), falling back to next...`);
+      }
+    }
+  }
+  throw lastError;
+}
+
 // Processes one AgentTask. Resolves to "success" or "skipped"; throws to fail the task.
 async function processTask(task) {
   const payload = JSON.parse(task.payload);
@@ -51,15 +76,17 @@ async function processTask(task) {
     diff = await gitlab.getMergeRequestDiff(comment.projectId, comment.number);
   }
 
-  // The trigger user's own key wins; the org owner's key is the fallback.
-  const owner = { type: access.installation.accountType, id: access.installation.accountId };
-  const accounts = [{ type: task.platform, id: identity.triggerUserId }];
-  if (owner.type !== accounts[0].type || owner.id !== accounts[0].id) accounts.push(owner);
-  const { provider, apiKey } = await keys.getProviderKey(config.ai.providerName, accounts);
+  const { provider, keys: candidates } = await keys.getProviderKeys(
+    config.ai.providerName,
+    { type: task.platform, id: identity.triggerUserId },
+    access.installation
+  );
+  if (candidates.length === 0) {
+    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId} or org ${identity.targetOrg}`);
+  }
 
-  const answer = await openRouter.chat({
+  const answer = await chatWithFallback(candidates, {
     baseUrl: provider.url || 'https://openrouter.ai/api/v1',
-    apiKey,
     model,
     system: buildSystemPrompt(comment, diff),
     user: prompt,
@@ -74,4 +101,4 @@ async function processTask(task) {
   return 'success';
 }
 
-module.exports = { processTask, buildSystemPrompt };
+module.exports = { processTask, buildSystemPrompt, chatWithFallback };
