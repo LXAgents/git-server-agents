@@ -11,9 +11,22 @@ test.before(async () => {
 });
 test.after(() => mock.close());
 
-test('identifies GitHub and GitLab users from their own token', async () => {
-  assert.deepEqual(await platforms.getUser('github', 'gh-alice'), { platform: 'github', id: '1001', login: 'alice' });
-  assert.deepEqual(await platforms.getUser('gitlab', 'gl-carol'), { platform: 'gitlab', id: '7', login: 'carol' });
+test('identifies GitHub and GitLab users from their own token, with their public profile', async () => {
+  assert.deepEqual(await platforms.getUser('github', 'gh-alice'), {
+    platform: 'github',
+    id: '1001',
+    login: 'alice',
+    name: 'Alice Liddell',
+    avatarUrl: 'https://avatars.example/1001',
+  });
+  assert.deepEqual(await platforms.getUser('gitlab', 'gl-carol'), {
+    platform: 'gitlab',
+    id: '7',
+    login: 'carol',
+    name: 'Carol',
+    avatarUrl: 'https://gitlab.example/7.png',
+  });
+  assert.deepEqual(await platforms.getUser('gitlab', 'gl-dave'), { platform: 'gitlab', id: '8', login: 'dave', name: null, avatarUrl: null });
 });
 
 test('maps a rejected token to 401', async () => {

@@ -17,7 +17,8 @@ function last4(row) {
 function ownerView(row) {
   if (row.repository) return { type: 'repo', id: row.repository.id, platform: row.repository.platform, name: row.repository.fullName };
   if (row.appInstallation) return { type: 'org', id: row.appInstallation.id, platform: row.appInstallation.platform, name: row.appInstallation.orgName };
-  return { type: 'user', id: row.accountId, platform: row.accountType, name: (row.account && row.account.username) || row.accountId };
+  // The login is filled in from the platform by the caller; the ID stands in until then.
+  return { type: 'user', id: row.accountId, platform: row.accountType, name: row.accountId };
 }
 
 function toView(row) {
