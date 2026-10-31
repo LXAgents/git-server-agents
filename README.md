@@ -8,7 +8,8 @@ background worker sends the comment to an OpenRouter model, together with:
 - the earlier conversation,
 - any repository files the model asks for.
 
-The answer is posted back as a reply. Repositories are never cloned: diffs, comments and files
+The answer is posted back as a reply, with a footer naming the model and what the answer
+cost in US dollars: every OpenRouter call it took, added up (`0 USD` for free models). Repositories are never cloned: diffs, comments and files
 all come from the REST APIs.
 
 ## How a webhook is handled
