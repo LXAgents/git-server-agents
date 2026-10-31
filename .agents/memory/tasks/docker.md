@@ -1,7 +1,7 @@
 ---
 name: docker
 description: Task record for the git-server-agents Docker image (1.2.0).
-status: in-progress
+status: done
 ---
 
 # Docker image

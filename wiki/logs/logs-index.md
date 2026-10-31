@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.2.0](1/2/0/CHANGELOG.md) | Docker image for online platforms | `CHANGELOG.md` |
 | [1.1.2](1/1/2/CHANGELOG.md) | Clean npm install: libsql adapter, node --watch, approved scripts | `CHANGELOG.md` |
 | [1.1.1](1/1/1/CHANGELOG.md) | Latest dependencies: Prisma 7, Node 26 CI | `CHANGELOG.md` |
 | [1.1.0](1/1/0/CHANGELOG.md) | Org keys, key fallback, admin and user APIs | `CHANGELOG.md` |
