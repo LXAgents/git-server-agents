@@ -50,10 +50,10 @@ function start({ pollMs = config.worker.pollMs } = {}) {
   // while a batch is running.
   const tick = async () => {
     try {
-      let processed;
-      do {
-        processed = await runOnce();
-      } while (processed > 0 && !stopped);
+      for (;;) {
+        const processed = await runOnce();
+        if (processed === 0 || stopped) break;
+      }
     } catch (err) {
       console.error('[worker] poll failed:', err.message);
     }

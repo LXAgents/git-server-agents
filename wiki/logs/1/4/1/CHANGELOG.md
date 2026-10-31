@@ -23,7 +23,7 @@ Fixes for the SonarCloud findings. Nothing changes for users.
   `docker-entrypoint.sh`.
 - **GitLab member lookup.** The user ID must be a plain number and is URL-encoded. Anything
   else counts as "not an owner".
-- **Worker.** The drain loop is a `do … while`, and its promises are explicitly not awaited.
+- **Worker.** The drain loop stops with a `break` after each batch, and its promises are explicitly not awaited.
 
 ## Fixed
 
