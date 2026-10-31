@@ -66,8 +66,9 @@ test('creates, lists and deletes accounts', async () => {
   assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-1` } })).status, 409);
   assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-3`, role: 'Admin' } })).status, 400);
   assert.equal((await call('POST', '/accounts', { body: {} })).status, 400);
-  const owner = await call('POST', '/accounts', { body: { userId: `${P}-4`, role: 'OWNER' } });
-  assert.equal((await owner.json()).role, 'owner');
+  // One owner per platform, set by GITHUB_ADMIN_ID: the API only adds members.
+  assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-4`, role: 'OWNER' } })).status, 400);
+  assert.equal((await call('POST', '/accounts', { body: { userId: `${P}-5`, role: 'member' } })).status, 201);
 
   const list = await (await call('GET', '/accounts')).json();
   const row = list.find((a) => a.id === `${P}-1`);

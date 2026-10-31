@@ -7,7 +7,8 @@ const keyStore = require('../services/keyStore');
 const profiles = require('../services/profileService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
-const { ROLES, MEMBER } = require('../services/roles');
+const owners = require('../services/ownerService');
+const { MEMBER } = require('../services/roles');
 const { HttpError } = require('../errors');
 
 function platformParam(value) {
@@ -20,11 +21,14 @@ function requiredString(value, name) {
   return String(value).trim();
 }
 
-function roleParam(value) {
+// Users are whitelisted as members only. The one owner per platform is set by
+// GITHUB_ADMIN_ID or GITLAB_ADMIN_ID, never through the API.
+function roleParam(value, platform) {
   if (value === undefined || value === null || value === '') return MEMBER;
   const role = String(value).trim().toLowerCase();
-  if (!ROLES.includes(role)) throw new HttpError(400, `role must be one of ${ROLES.join(', ')}`);
-  return role;
+  if (role === MEMBER) return role;
+  const variable = platform === 'gitlab' ? 'GITLAB_ADMIN_ID' : 'GITHUB_ADMIN_ID';
+  throw new HttpError(400, `role must be ${MEMBER}: a platform has one owner, set by ${variable}`);
 }
 
 function accountView(a, profile) {
@@ -32,7 +36,7 @@ function accountView(a, profile) {
     platform: a.type,
     id: a.id,
     ...profiles.describe(a.id, profile),
-    role: a.role,
+    role: owners.effectiveRole(a.type, a),
     keyCount: a._count ? a._count.keys : undefined,
     orgCount: a._count ? a._count.installations : undefined,
     createdAt: a.createdAt,
@@ -56,7 +60,7 @@ async function createAccount(req, res) {
   const { platform, token } = req.admin;
   const { userId, role } = req.body || {};
   const account = await prisma.account.create({
-    data: { type: platform, id: requiredString(userId, 'userId'), role: roleParam(role) },
+    data: { type: platform, id: requiredString(userId, 'userId'), role: roleParam(role, platform) },
   });
   res.status(201).json(accountView(account, await profiles.getProfile(platform, account.id, token)));
 }

@@ -1,15 +1,7 @@
-const config = require('../config');
-const prisma = require('../db');
 const platforms = require('../services/platformService');
 const profiles = require('../services/profileService');
-const { OWNER } = require('../services/roles');
+const owners = require('../services/ownerService');
 const { HttpError } = require('../errors');
-
-// GITHUB_ADMIN_ID / GITLAB_ADMIN_ID hold numeric platform user IDs, never logins: a login can
-// be renamed and then claimed by someone else, an ID cannot. These users become owners.
-function isConfiguredOwner(platform, id) {
-  return config[platform].adminIds.includes(String(id));
-}
 
 // Who the caller is on the platform, from their own token:
 //   X-Platform: github | gitlab
@@ -26,23 +18,14 @@ async function platformCaller(req) {
   return { ...user, token };
 }
 
-// The caller's whitelisted account, or null. A configured owner ID is whitelisted, and made an
-// owner, on first sign-in.
-async function findAccount(caller) {
-  const where = { type_id: { type: caller.platform, id: caller.id } };
-  const account = await prisma.account.findUnique({ where });
-  if (isConfiguredOwner(caller.platform, caller.id) && (!account || account.role !== OWNER)) {
-    return prisma.account.upsert({
-      where,
-      create: { type: caller.platform, id: caller.id, role: OWNER },
-      update: { role: OWNER },
-    });
-  }
-  return account;
+// The caller's whitelisted account, or null. The one configured owner ID is whitelisted, and
+// made owner, on first sign-in (see ownerService).
+function findAccount(caller) {
+  return owners.syncAccount(caller.platform, caller.id);
 }
 
 // Signs a request in with the caller's own GitHub or GitLab token. The caller must also be
-// whitelisted by hand, unless their ID is a configured owner.
+// whitelisted by hand, unless their ID is the platform's configured owner.
 async function userAuth(req, _res, next) {
   try {
     const caller = await platformCaller(req);
@@ -55,4 +38,4 @@ async function userAuth(req, _res, next) {
   }
 }
 
-module.exports = { userAuth, platformCaller, findAccount, isConfiguredOwner };
+module.exports = { userAuth, platformCaller, findAccount };

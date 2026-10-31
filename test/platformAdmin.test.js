@@ -7,7 +7,7 @@ const { startMockPlatform } = require('./helpers/mockPlatform');
 process.env.ENCRYPTION_KEY = crypto.randomBytes(32).toString('hex');
 process.env.ADMIN_TOKEN = 'admin-test-token';
 // stranger (GitHub 9999) is not whitelisted; dave (GitLab 8) is a GitLab admin; alice is neither.
-process.env.GITHUB_ADMIN_ID = ' 9999 , 123';
+process.env.GITHUB_ADMIN_ID = ' 9999 ';
 process.env.GITLAB_ADMIN_ID = '8';
 
 let mock;
@@ -70,18 +70,49 @@ test('a configured admin ID becomes an owner on first sign-in, and nothing about
   assert.equal('username' in account, false);
 });
 
-test('an owner role in the database opens the admin API without an admin ID', async () => {
-  // alice (GitHub 1001) is not in GITHUB_ADMIN_ID.
+test('an owner row for anyone but the configured ID counts as a member, and is set back', async () => {
+  // alice (GitHub 1001) is not GITHUB_ADMIN_ID, so a stale owner row gives her nothing.
   await prisma.account.upsert({
     where: { type_id: { type: 'github', id: '1001' } },
     create: { type: 'github', id: '1001', role: 'owner' },
     update: { role: 'owner' },
   });
   try {
-    assert.equal((await call('/api/admin/accounts', { token: 'gh-alice', platform: 'github' })).status, 200);
+    const list = await (await call('/api/admin/accounts', { token: 'gh-stranger', platform: 'github' })).json();
+    assert.equal(list.find((a) => a.id === '1001').role, 'member');
+    assert.equal((await call('/api/admin/accounts', { token: 'gh-alice', platform: 'github' })).status, 403);
+    const alice = await prisma.account.findUnique({ where: { type_id: { type: 'github', id: '1001' } } });
+    assert.equal(alice.role, 'member');
   } finally {
     await prisma.account.deleteMany({ where: { type: 'github', id: '1001' } });
   }
+});
+
+test('the configured owner signing in leaves them the only owner on the platform', async () => {
+  await prisma.account.create({ data: { type: 'github', id: '1002', role: 'owner' } });
+  await prisma.account.create({ data: { type: 'gitlab', id: '7', role: 'owner' } });
+  try {
+    // Make the next sign-in sync the database: stranger is demoted first.
+    await prisma.account.update({ where: { type_id: { type: 'github', id: '9999' } }, data: { role: 'member' } });
+    assert.equal((await call('/api/user/me', { token: 'gh-stranger', platform: 'github' })).status, 200);
+    const owners = await prisma.account.findMany({ where: { type: 'github', role: 'owner' } });
+    assert.deepEqual(owners.map((a) => a.id), ['9999']);
+    // GitLab is a separate platform with its own owner: untouched by a GitHub sign-in.
+    assert.equal((await prisma.account.findUnique({ where: { type_id: { type: 'gitlab', id: '7' } } })).role, 'owner');
+  } finally {
+    await prisma.account.deleteMany({ where: { OR: [{ type: 'github', id: '1002' }, { type: 'gitlab', id: '7' }] } });
+  }
+});
+
+test('nobody can be made owner through the API', async () => {
+  const res = await fetch(`${base}/api/admin/accounts`, {
+    method: 'POST',
+    headers: { authorization: 'Bearer gh-stranger', 'x-platform': 'github', 'content-type': 'application/json' },
+    body: JSON.stringify({ userId: '1003', role: 'owner' }),
+  });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /GITHUB_ADMIN_ID/);
+  assert.equal(await prisma.account.count({ where: { type: 'github', id: '1003' } }), 0);
 });
 
 test('a configured admin ID that was demoted in the database is made owner again', async () => {
