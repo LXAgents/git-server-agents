@@ -1,0 +1,6 @@
+node_modules/
+.env
+prisma/schema.prisma
+prisma/*.db
+prisma/*.db-journal
+.agents/plans/
