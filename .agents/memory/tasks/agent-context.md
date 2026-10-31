@@ -1,7 +1,7 @@
 ---
 name: agent-context
 description: Task record for agent chat history, repository file reading and stricter trigger and key rules (1.4.0).
-status: in progress
+status: done
 ---
 
 # Agent context and stricter rules
@@ -28,6 +28,6 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/agent-context` | `.agents/` | |
-| 2 | Agent context | History, files, tools, strict rules, tests, docs | git-server-agents | `feat/agent-context` | `src/services/`, `test/`, README, `.env.example` | |
-| 3 | Release | 1.4.0 changelog and version | git-server-agents | `release/1.4.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/agent-context` | `.agents/` | #26 |
+| 2 | Agent context | History, files, tools, strict rules, tests, docs | git-server-agents | `feat/agent-context` | `src/services/`, `test/`, README, `.env.example` | #27 |
+| 3 | Release | 1.4.0 changelog and version | git-server-agents | `release/1.4.0` | `wiki/logs/`, `package.json` | #28 |
