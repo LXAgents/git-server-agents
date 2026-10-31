@@ -53,21 +53,71 @@ npm run dev                       # server + worker on SQLite, with nodemon
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
 | `DEFAULT_MODEL` | Model when the comment names none (default `openrouter/auto`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
+| `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes the admin API |
+| `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
-## Whitelisting
+## Whitelisting and API keys
+
+Users are whitelisted only by the operator. Orgs are created only by **import**: a
+whitelisted user who owns the org on the platform imports it from the dashboard or the
+user API. Roles are never stored; ownership is asked of GitHub or GitLab on every org change.
+
+| Who | How they authenticate | What they can do |
+|---|---|---|
+| Operator | `Authorization: Bearer $ADMIN_TOKEN` on `/api/admin` | Whitelist and remove users; list and delete orgs; add and delete any key |
+| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <personal access token>` on `/api/user` | Manage their own keys; import orgs they own; manage keys of orgs they own |
+
+An org owner is GitHub org role `admin` (or the user's own account), or GitLab access
+level Owner (50) on the top-level group. A GitHub token needs `read:org`; a GitLab token
+needs `read_api`. The token is used for the request and never stored. On GitHub an org can
+be imported only once the App is installed on it.
+
+For an OpenRouter call the worker tries every active key in order: the commenting user's
+keys, then the org's keys, each by `priority` (highest first). When a key fails with 401,
+402, 403, 429, 5xx, a timeout or a network error, the next key is tried; 400 and 404 stop at
+once because every key would fail the same way.
+
+### Admin API (`/api/admin`)
+
+| Method | Path | Body |
+|---|---|---|
+| GET | `/accounts` | |
+| POST | `/accounts` | `{ platform, userId, username }` |
+| DELETE | `/accounts/:platform/:userId` | (also removes orgs the user imported, and their keys) |
+| GET | `/orgs` | |
+| DELETE | `/orgs/:id` | |
+| GET | `/keys` | |
+| POST | `/keys` | `{ target: "user", platform, userId, apiKey, priority? }` or `{ target: "org", appInstallationId, apiKey, priority? }` |
+| DELETE | `/keys/:id` | |
+
+### User API (`/api/user`)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/me` | The signed-in user |
+| GET, POST | `/keys` | Own keys; POST `{ apiKey, priority? }` |
+| DELETE | `/keys/:keyId` | Own keys only |
+| GET | `/orgs` | Imported orgs the user owns now |
+| GET | `/orgs/importable` | Orgs the user owns on the platform, with `importable` and `reason` |
+| POST | `/orgs/import` | `{ orgName }`; owner only |
+| DELETE | `/orgs/:id` | Owner only |
+| GET, POST | `/orgs/:id/keys` | Owner only; POST `{ apiKey, priority? }` |
+| DELETE | `/orgs/:id/keys/:keyId` | Owner only |
+
+Keys are returned with their last four characters only. Errors are JSON `{ "error": "..." }`
+with 400, 401, 403, 404 or 409.
+
+### Command line (on the server host)
 
 ```bash
-# a user, by platform user id (not login, which can be renamed and reclaimed)
-node scripts/manage.js add-account github <userId> <login>
-# an org, owned by an account; the GitHub installation id is optional but pins it
-node scripts/manage.js add-org github <org> <ownerUserId> <installationId>
-# an OpenRouter key for an account (stored encrypted)
-node scripts/manage.js add-key github <userId> sk-or-... 10
+node scripts/manage.js add-account github <userId> <login>     # whitelist a user, by platform id
+node scripts/manage.js add-key github <userId> sk-or-... 10      # a user's key
+node scripts/manage.js add-org-key <orgName> sk-or-... 5 --platform github
 node scripts/manage.js list
 ```
 
-For an OpenRouter key the worker tries the commenting user's keys first, then the org
-owner's, highest `priority` first.
+`add-org` is still there for bootstrapping on the server host, where database access
+already grants everything; everyone else imports orgs.
 
 ## Layout
 
@@ -76,9 +126,10 @@ prisma/          schema.dev.prisma, schema.prod.prisma, seed.js
 scripts/         setup-db.js, manage.js
 src/server.js    entry point (server + inline worker)
 src/worker.js    queue worker (`npm run worker` to run alone)
-src/routes/      webhook routes
-src/controllers/ webhook controller
+src/routes/      webhook, admin and user routes
+src/controllers/ webhook, admin and user controllers
+src/middleware/  admin token, platform-token sign-in, CORS
 src/services/    signature, identity, whitelist, task, comment parser, GitHub, GitLab,
-                 OpenRouter, key and crypto services
+                 platform roles, OpenRouter, key, key store and crypto services
 test/            node:test suites (`npm test`)
 ```
