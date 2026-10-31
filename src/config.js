@@ -1,9 +1,16 @@
 require('dotenv').config({ quiet: true });
+const path = require('path');
 
 const isProd = process.env.PROD === 'prod';
 
+// PostgreSQL reads DATABASE_URL; SQLite always uses prisma/dev.db, whatever the working directory.
+const databaseUrl = isProd
+  ? process.env.DATABASE_URL || ''
+  : `file:${path.join(__dirname, '..', 'prisma', 'dev.db')}`;
+
 module.exports = {
   isProd,
+  databaseUrl,
   port: Number(process.env.PORT) || 3000,
   github: {
     webhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',
