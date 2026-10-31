@@ -1,7 +1,7 @@
 # git-server-agents
 
-A zero-trust webhook server and AI agent for GitHub and GitLab apps. Whitelisted users
-comment on a pull request, merge request or issue. The server queues the event, and a
+A webhook server and AI agent for GitHub and GitLab apps. Anyone can log in with GitHub or
+GitLab, and comment on a pull request, merge request or issue in an imported org. The server queues the event, and a
 background worker sends the comment to an OpenRouter model, together with:
 
 - the diff,
@@ -15,17 +15,23 @@ all come from the REST APIs.
 
 1. `POST /api/webhooks/github` or `/gitlab` checks the signature (`X-Hub-Signature-256`
    HMAC or `X-Gitlab-Token`). Bad signature: **401**.
-2. The org and the triggering user are looked up in `AppInstallation` and `Account`.
-   Either missing: **403**. The apps are public, so nothing is trusted that was not added
-   by hand. When only the user is missing and the comment is a trigger, the task is still
-   queued so the agent can reply `NOT_WHITELISTED`. Orgs nobody imported get no reply at all.
-3. The payload is stored as a `pending` `AgentTask` and the request returns **200** at once.
-4. The worker claims the task and skips it unless line 1 starts with `@agents` or names a
-   model (see below). It
-   re-checks the whitelist, then fetches the diff (PRs and MRs only) and the last 30 comments.
+2. Anything other than a new comment whose line 1 is a trigger (see below) answers **200**
+   `{ "status": "ignored" }` and is not stored.
+3. The org must be imported (`AppInstallation`) for that App installation; otherwise **403**,
+   and the agent never acts there. The apps are public, so this is the gate. The commenter
+   needs no account: which keys they may use is decided per comment.
+4. The payload is stored as a `pending` `AgentTask` and the request returns **200** at once.
+   Every webhook is logged with its outcome (`ignored`, `403 <reason>` or `queued task <id>`).
+5. The worker claims the task and puts 👀 on the comment, so the commenter sees it was picked
+   up. It re-checks the org, then fetches the diff (PRs and MRs only) and the last 30 comments.
    It calls OpenRouter and posts the reply. The task ends as `success`, `skipped` or `failed`
    (see `errorLog`). A failed task also gets an error reply on the thread (see below).
-5. When the worker starts, tasks left in `processing` for over 30 minutes (by a restart or a
+   - Up to `WORKER_CONCURRENCY` (4) comments are answered at once, so a slow one doesn't hold
+     up the rest.
+   - Each model call has `MODEL_TIMEOUT_MS` (60 s), and a whole answer has `TASK_TIMEOUT_MS`
+     (4 minutes, every call, tool and key together). Past that it replies `TIMEOUT`.
+   - GitHub and GitLab calls time out after `PLATFORM_TIMEOUT_MS` (30 s).
+6. When the worker starts, tasks left in `processing` for over 30 minutes (by a restart or a
    redeploy) go back to `pending`.
 
 ## Asking the agent
@@ -60,14 +66,13 @@ Error replies are left out of the conversation history.
 | Code | Status | Meaning | Retry |
 |---|---|---|---|
 | `NO_QUESTION` | | The trigger asks nothing | Add the question |
-| `NOT_WHITELISTED` | | The commenter isn't whitelisted (in an imported org) | No: ask the owner |
-| `NO_API_KEY` | | No active OpenRouter key the commenter may use | No: add a key |
+| `NO_API_KEY` | | No active OpenRouter key the commenter may use | No: log in and add a key |
 | `INVALID_API_KEY` | 401 | The key is invalid, revoked or disabled | No: replace the key |
 | `INSUFFICIENT_CREDITS` | 402 | The key's balance has run out | No: add credits, or use a `:free` model |
 | `CONTENT_FLAGGED` | 403 | Moderation refused the input | No: rephrase |
 | `MODEL_NOT_FOUND` | 404 | The model id is wrong or has no provider | No: fix the id |
 | `BAD_REQUEST` | 400 | OpenRouter rejected the request | No: try another model |
-| `TIMEOUT` | 408 | No answer within 120 seconds | Once, then pick a faster model |
+| `TIMEOUT` | 408 | A model call took over 60 s, or the answer over 4 minutes | Once, then pick a faster model |
 | `RATE_LIMITED` | 429 | The rate limit or the free-model daily limit was hit | After the time given |
 | `PROVIDER_UNAVAILABLE` | 502, 503 | The model's provider is down or busy | In a few minutes |
 | `PROVIDER_ERROR` | 500 | The model's provider failed | In a few minutes |
@@ -143,6 +148,9 @@ the same way in `src/db.js`.
 | `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter/free`) |
 | `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
+| `WORKER_CONCURRENCY` | How many comments are answered at once (default 4) |
+| `MODEL_TIMEOUT_MS`, `TASK_TIMEOUT_MS` | Limits for one model call (default 60000) and one whole answer (default 240000) |
+| `PLATFORM_TIMEOUT_MS` | Limit for each GitHub or GitLab API call (default 30000) |
 | `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | The **one** numeric GitHub or GitLab user ID that owns that platform (empty: no owner). A comma list stops the server at start |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
@@ -177,8 +185,8 @@ container health check.
   - The GitHub App or GitLab credentials, including the client IDs and secrets for sign-in.
   - `PUBLIC_URL`, set to the server's public URL.
   - `CORS_ORIGINS`, set to the dashboard's public URL.
-- **Whitelist users from the dashboard**, or with the CLI in the running container:
-  `docker exec <container> node scripts/manage.js list`. Platforms offer the same through their
+- **Users log in with GitHub or GitLab**; the owner sees them on the dashboard's Users page,
+  or with the CLI in the running container: `docker exec <container> node scripts/manage.js list`. Platforms offer the same through their
   shell or console.
 - **To split the worker out,** run a second service from the same image with the command
   `node src/worker.js`, and set `WORKER_INLINE=false` on the web service.
@@ -208,26 +216,29 @@ How it works:
   once. Dashboards older than 1.3.0 expect the token in the fragment and can't use this server's
   OAuth sign-in.
 
-The token is then sent as `Authorization: Bearer`. The server never stores it, the user must
-still be whitelisted, and org ownership is still checked live.
+The token is then sent as `Authorization: Bearer`. The server never stores it, and org
+ownership is still checked live. There is no separate sign-up: the first login creates the
+account, as `free`.
 
-## Whitelisting and API keys
+## Users, orgs and API keys
 
-Users are whitelisted only by the platform's owner. Orgs are created only by **import**: a
-whitelisted user who owns the org on the platform imports it from the dashboard or the
-user API. Org and repository rights are never stored; they are asked of GitHub or GitLab on
+Anyone with a GitHub or GitLab account can log in; the first login creates their account. Orgs
+are created only by **import**: a user who owns the org on the platform imports it from the
+dashboard or the user API. Org and repository rights are never stored; they are asked of GitHub or GitLab on
 every change.
 
 We store only a user's platform, numeric ID and **role**. Their login, display name and avatar
 are read from GitHub (`GET /user/{id}`) or GitLab (`GET /users/{id}`) when needed, and kept in
 memory for 10 minutes. Roles are lower case: `owner` runs this deployment, everyone else is
-`member` (the default). More roles can be added later.
+`free` (the default). More roles can be added later. Upgrading from 1.10 or earlier:
+`scripts/migrate-roles.js` renames stored `member` rows to `free` after `prisma db push` (the
+Docker entrypoint and `npm run db:push` run it).
 
 **Each platform has one owner at most:** the user in `GITHUB_ADMIN_ID` (GitHub) or
 `GITLAB_ADMIN_ID` (GitLab).
 - The database's `owner` role only mirrors that setting. When that user signs in they become
-  `owner`, and any other account of the platform still marked `owner` goes back to `member`.
-- Until then, such an account already counts as a member.
+  `owner`, and any other account of the platform still marked `owner` goes back to `free`.
+- Until then, such an account already counts as free.
 - Nobody can be made owner through the API. To hand over ownership, change the variable and
   restart.
 
@@ -237,12 +248,12 @@ GitLab ones.
 
 | Who | How they authenticate | What they can do |
 |---|---|---|
-| Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`; the one user in `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID` | Whitelist and remove users; list and delete orgs and repositories; add and delete any key, on their platform |
-| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
+| Owner | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`; the one user in `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID` | See and remove users; list and delete orgs and repositories; add and delete any key, on their platform |
+| Free user (anyone who logs in) | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
 
 Users are matched by numeric user ID, never by login, because a login can be renamed and then
 claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the GitLab
-profile page. The user in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` is whitelisted as `owner` the
+profile page. The user in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` becomes `owner` the
 first time they sign in, and stays `owner` while the setting names them. `/api/user/me` returns
 `{ platform, id, login, name, avatarUrl, role }`.
 
@@ -270,8 +281,8 @@ once because every key would fail the same way.
 | Method | Path | Body |
 |---|---|---|
 | GET | `/accounts` | |
-| POST | `/accounts` | `{ userId }` on the session's platform, always as `member` (`role: "owner"` is refused: the owner comes from `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID`) |
-| DELETE | `/accounts/:platform/:userId` | `:platform` must be the session's; also removes orgs the user imported, and their keys |
+| POST | `/accounts` | `{ userId }` on the session's platform, always as `free`, before they first log in (`role: "owner"` is refused: the owner comes from `GITHUB_ADMIN_ID` / `GITLAB_ADMIN_ID`) |
+| DELETE | `/accounts/:platform/:userId` | `:platform` must be the session's; also removes orgs the user imported, and their keys. They can log in again, as a new free user |
 | GET | `/orgs` | |
 | DELETE | `/orgs/:id` | |
 | GET | `/repos` | |
@@ -313,7 +324,7 @@ with 400, 401, 403, 404 or 409.
 ### Command line (on the server host)
 
 ```bash
-node scripts/manage.js add-account github <userId> <login>     # whitelist a user, by platform id
+node scripts/manage.js add-account github <userId> <login>     # add a user before they log in, by platform id
 node scripts/manage.js add-key github <userId> sk-or-... 10      # a user's key
 node scripts/manage.js add-org-key <orgName> sk-or-... 5 --platform github
 node scripts/manage.js list
@@ -333,7 +344,7 @@ src/worker.js    queue worker (`npm run worker` to run alone)
 src/routes/      webhook, auth, admin and user routes
 src/controllers/ webhook, auth, admin, user and repository controllers
 src/middleware/  owner and platform-token sign-in, CORS
-src/services/    signature, identity, whitelist, task, comment parser, agent errors, GitHub, GitLab,
+src/services/    signature, identity, org check, task, comment parser, agent errors, GitHub, GitLab,
                  platform roles, OAuth, OpenRouter, model, key, key store, repository
                  and crypto services
 test/            node:test suites (`npm test`)
