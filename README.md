@@ -52,12 +52,17 @@ the same way in `src/db.js`.
 | `PROD` | `prod` for PostgreSQL, otherwise SQLite |
 | `DATABASE_URL` | PostgreSQL connection string (prod) |
 | `GITHUB_WEBHOOK_SECRET`, `GITLAB_WEBHOOK_SECRET` | Webhook authenticity; required in prod |
-| `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` | Mint installation tokens to read diffs and post comments |
-| `GITLAB_TOKEN`, `GITLAB_API_URL` | Bot token (api scope) and API base for GitLab |
+| `GITHUB_CLIENT_ID`, `GITHUB_PRIVATE_KEY` | The GitHub App's client ID and private key. They mint installation tokens to read diffs and post comments |
+| `GITHUB_CLIENT_SECRET` | The GitHub App's client secret, for "Continue with GitHub" on the dashboard |
+| `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET` | A GitLab OAuth application, for "Continue with GitLab" on the dashboard |
+| `GITLAB_TOKEN`, `GITLAB_API_URL` | Bot token (api scope) and API base for GitLab. GitLab has no app-only OAuth token, so the bot keeps a token |
+| `GITHUB_URL`, `GITLAB_URL` | Web addresses for OAuth (default `https://github.com`, and `GITLAB_API_URL` without `/api/v4`). Change them only for GitHub Enterprise or self-managed GitLab |
+| `PUBLIC_URL` | This server's public address, used for the OAuth callback URL. Set it behind a proxy or on a platform |
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
 | `DEFAULT_MODEL` | Model when the comment names none (default `openrouter/auto`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
-| `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes the admin API |
+| `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
+| `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that get admin control when they sign in |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
 ## Run with Docker
@@ -88,13 +93,37 @@ container health check.
 - **Set at least these:**
   - `ENCRYPTION_KEY` and `ADMIN_TOKEN`.
   - The webhook secrets. They are required when `PROD=prod`.
-  - The GitHub App or GitLab credentials.
+  - The GitHub App or GitLab credentials, including the client IDs and secrets for sign-in.
+  - `PUBLIC_URL`, set to the server's public URL.
   - `CORS_ORIGINS`, set to the dashboard's public URL.
 - **Whitelist users from the dashboard**, or with the CLI in the running container:
   `docker exec <container> node scripts/manage.js list`. Platforms offer the same through their
   shell or console.
 - **To split the worker out,** run a second service from the same image with the command
   `node src/worker.js`, and set `WORKER_INLINE=false` on the web service.
+
+## Signing in to the dashboard
+
+Users sign in with **Continue with GitHub** or **Continue with GitLab**. A button shows only
+when that platform's client ID and secret are set. Pasting a personal access token still works.
+
+1. On the GitHub App, set the callback URL to `<PUBLIC_URL>/api/auth/github/callback`, generate
+   a client secret, and give it the **Members: read** organization permission, which the owner
+   checks need. On GitLab, create an OAuth application with the `read_api` scope and the
+   callback URL `<PUBLIC_URL>/api/auth/gitlab/callback`.
+2. Set the client IDs and secrets, `PUBLIC_URL`, and `CORS_ORIGINS` to the dashboard's address.
+
+How it works:
+
+- `GET /api/auth/providers` lists the platforms that are set up.
+- `GET /api/auth/:platform/start?redirect=<dashboard URL>` accepts only a redirect whose origin
+  is in `CORS_ORIGINS` (never `*`). It sends the browser to the platform with a signed, 10-minute
+  `state`, tied to the browser by a cookie.
+- `GET /api/auth/:platform/callback` swaps the code for a user token and sends the browser back
+  with the token in the URL fragment. Browsers never send the fragment to a server.
+
+The token is then used like a personal access token. The server never stores it, the user must
+still be whitelisted, and org ownership is still checked live.
 
 ## Whitelisting and API keys
 
@@ -105,7 +134,13 @@ user API. Roles are never stored; ownership is asked of GitHub or GitLab on ever
 | Who | How they authenticate | What they can do |
 |---|---|---|
 | Operator | `Authorization: Bearer $ADMIN_TOKEN` on `/api/admin` | Whitelist and remove users; list and delete orgs; add and delete any key |
-| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <personal access token>` on `/api/user` | Manage their own keys; import orgs they own; manage keys of orgs they own |
+| Admin user | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`, when their user ID is in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` | The same as the operator |
+| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys; import orgs they own; manage keys of orgs they own |
+
+Admin users are matched by numeric user ID, never by login, because a login can be renamed and
+then claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the
+GitLab profile page. An admin user is whitelisted automatically the first time they sign in, and
+`/api/user/me` returns `isAdmin: true` for them.
 
 An org owner is GitHub org role `admin` (or the user's own account), or GitLab access
 level Owner (50) on the top-level group. A GitHub token needs `read:org`; a GitLab token
@@ -167,10 +202,10 @@ scripts/         setup-db.js, manage.js
 Dockerfile       production image; docker-entrypoint.sh prepares the database on start
 src/server.js    entry point (server + inline worker)
 src/worker.js    queue worker (`npm run worker` to run alone)
-src/routes/      webhook, admin and user routes
-src/controllers/ webhook, admin and user controllers
+src/routes/      webhook, auth, admin and user routes
+src/controllers/ webhook, auth, admin and user controllers
 src/middleware/  admin token, platform-token sign-in, CORS
 src/services/    signature, identity, whitelist, task, comment parser, GitHub, GitLab,
-                 platform roles, OpenRouter, key, key store and crypto services
+                 platform roles, OAuth, OpenRouter, key, key store and crypto services
 test/            node:test suites (`npm test`)
 ```

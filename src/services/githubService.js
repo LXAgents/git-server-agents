@@ -8,12 +8,13 @@ function base64url(input) {
   return Buffer.from(input).toString('base64url');
 }
 
-// GitHub App JWT (RS256), valid for under ten minutes as GitHub requires.
+// GitHub App JWT (RS256), valid for under ten minutes as GitHub requires. GitHub accepts the
+// App's client ID as the issuer, in place of its numeric App ID.
 function appJwt(now = Math.floor(Date.now() / 1000)) {
-  const { appId, privateKey } = config.github;
-  if (!appId || !privateKey) throw new Error('GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are required');
+  const { clientId, privateKey } = config.github;
+  if (!clientId || !privateKey) throw new Error('GITHUB_CLIENT_ID and GITHUB_PRIVATE_KEY are required');
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const payload = base64url(JSON.stringify({ iat: now - 60, exp: now + 540, iss: appId }));
+  const payload = base64url(JSON.stringify({ iat: now - 60, exp: now + 540, iss: clientId }));
   const signature = crypto.sign('RSA-SHA256', Buffer.from(`${header}.${payload}`), privateKey).toString('base64url');
   return `${header}.${payload}.${signature}`;
 }

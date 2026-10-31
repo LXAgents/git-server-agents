@@ -2,6 +2,7 @@ const express = require('express');
 const webhooks = require('./routes/webhooks');
 const admin = require('./routes/admin');
 const user = require('./routes/user');
+const auth = require('./routes/auth');
 const { cors } = require('./middleware/cors');
 const { HttpError } = require('./errors');
 
@@ -27,6 +28,7 @@ function createApp() {
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api/webhooks', webhooks);
+  app.use('/api/auth', cors, auth);
   app.use('/api/admin', cors, admin);
   app.use('/api/user', cors, user);
 
