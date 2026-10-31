@@ -1,7 +1,7 @@
 const config = require('../config');
 const { githubIdentity, gitlabIdentity } = require('./identityService');
 const whitelist = require('./whitelistService');
-const { toComment, REPLY_MARKER, ERROR_MARKER } = require('./eventService');
+const { toComment, isReply, isErrorReply, removeMarkers, REPLY_MARKER, ERROR_MARKER } = require('./eventService');
 const { parseComment, stripTrigger } = require('./commentParser');
 const models = require('./modelService');
 const repoStore = require('./repoStore');
@@ -47,7 +47,7 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 const FOOTER_START = '<sub>Model: `';
 const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Cost|User): `[^`]*`<\/sub>){0,2}\s*$/;
 function stripReply(body) {
-  const text = body.replace(REPLY_MARKER, '').trim();
+  const text = removeMarkers(body).trim();
   const start = text.lastIndexOf(FOOTER_START);
   if (start !== -1 && FOOTER.test(text.slice(start))) return text.slice(0, start).trim();
   return text;
@@ -61,8 +61,8 @@ function buildHistory(comments, currentCommentId, maxChars = MAX_HISTORY_CHARS) 
   for (const c of comments) {
     if (currentCommentId !== undefined && String(c.id) === String(currentCommentId)) continue;
     const body = String(c.body || '');
-    if (body.includes(ERROR_MARKER)) continue;
-    if (body.includes(REPLY_MARKER)) {
+    if (isErrorReply(body)) continue;
+    if (isReply(body)) {
       const content = stripReply(body);
       if (content) messages.push({ role: 'assistant', content });
     } else {
