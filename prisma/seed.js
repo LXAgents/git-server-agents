@@ -1,5 +1,5 @@
 // Inserts OpenRouter as the default AI provider. Safe to run repeatedly.
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();

@@ -44,3 +44,17 @@ status: in-progress
   schema, so it looks the row up first). Ran twice against SQLite: one row, same id.
 - `npm run db:push` and `npx prisma validate` (PostgreSQL schema) both pass.
 - Next task depends on: `npm run predev` generating the client before `src/` exists.
+
+### Task 3 — feat/webhook
+
+- `src/app.js` builds the Express app (raw body kept for signature checks), `src/server.js`
+  starts it, `src/routes/webhooks.js` mounts `POST /api/webhooks/github` and `/gitlab`.
+- `src/controllers/webhookController.js`: verify signature (GitHub HMAC-SHA256, GitLab
+  token; required in prod) -> extract identity -> whitelist -> enqueue `AgentTask` -> 200.
+- `src/services/whitelistService.js` matches the org on `AppInstallation(platform, orgName)`
+  and the user on `Account(type, id)` by immutable platform user id, not login. A stored
+  `installationId` must match the payload's. 403 bodies give no reason; the log does.
+- `scripts/manage.js` adds and removes whitelisted accounts and orgs by hand.
+- Checked with curl on SQLite: signed whitelisted event 200 + queued, bad signature 401,
+  unknown user 403, unknown GitLab group 403.
+- dotenv 17 logs on load, so every `config()` call passes `quiet: true`.
