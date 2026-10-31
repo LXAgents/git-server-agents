@@ -45,7 +45,7 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 // The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
 // linear on any comment body.
 const FOOTER_START = '<sub>Model: `';
-const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>Cost: `[^`]*`<\/sub>)?\s*$/;
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Cost|User): `[^`]*`<\/sub>){0,2}\s*$/;
 function stripReply(body) {
   const text = body.replace(REPLY_MARKER, '').trim();
   const start = text.lastIndexOf(FOOTER_START);
@@ -346,7 +346,13 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     })
   );
 
-  const footer = `<sub>Model: \`${model}\`</sub>\n<sub>Cost: \`${formatCost(request.spend)}\`</sub>`;
+  // The login is in a code span, so GitHub and GitLab don't link or notify the user.
+  const asker = String(comment.author || identity.triggerUser || 'unknown').replaceAll('`', '');
+  const footer = [
+    `<sub>Model: \`${model}\`</sub>`,
+    `<sub>Cost: \`${formatCost(request.spend)}\`</sub>`,
+    `<sub>User: \`@${asker}\`</sub>`,
+  ].join('\n');
   await postReply(task.platform, comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
   return 'success';
 }
