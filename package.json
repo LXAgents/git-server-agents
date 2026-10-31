@@ -1,6 +1,6 @@
 {
   "name": "git-server-agents",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Zero-trust webhook server and AI agent for GitHub and GitLab apps",
   "main": "src/server.js",
   "scripts": {
@@ -12,7 +12,7 @@
     "worker": "node src/worker.js",
     "db:push": "node scripts/setup-db.js && npx prisma db push && npx prisma generate",
     "db:seed": "node prisma/seed.js",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1"
   },
   "repository": {
     "type": "git",
