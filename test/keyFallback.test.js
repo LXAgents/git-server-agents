@@ -63,3 +63,15 @@ test('does not burn through keys on a 400 or 404', async (t) => {
   await assert.rejects(chatWithFallback(keys, attempt), /400/);
   assert.deepEqual(tried, ['user-key']);
 });
+
+test('the final error lists every key tried, by owner and status', async (t) => {
+  stubChat(t, { 'user-key': httpError(429), 'org-key-1': httpError(402), 'org-key-2': httpError(503) });
+  await assert.rejects(chatWithFallback(keys, attempt), (err) => {
+    assert.deepEqual(err.attempts, [
+      { owner: 'user', status: 429 },
+      { owner: 'org', status: 402 },
+      { owner: 'org', status: 503 },
+    ]);
+    return true;
+  });
+});

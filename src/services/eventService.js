@@ -4,6 +4,8 @@
 // Every reply carries this marker, so the agent never answers itself even when its
 // token belongs to a whitelisted user.
 const REPLY_MARKER = '<!-- git-server-agents -->';
+// Error replies carry this as well, so they stay out of the conversation history.
+const ERROR_MARKER = '<!-- git-server-agents:error -->';
 
 function githubComment(event, body) {
   if (body.action !== 'created' || !body.comment || !body.repository) return null;
@@ -83,4 +85,4 @@ function toComment(platform, event, payload) {
   return comment;
 }
 
-module.exports = { toComment, REPLY_MARKER };
+module.exports = { toComment, REPLY_MARKER, ERROR_MARKER };
