@@ -6,6 +6,7 @@ const tasks = require('../services/taskService');
 const { toComment } = require('../services/eventService');
 const { parseComment } = require('../services/commentParser');
 const { logSafe } = require('../utils/strings');
+const log = require('../services/logService');
 
 // Without a secret anyone could forge an event, so production (PROD=prod) refuses to run
 // unsigned. Development allows it so the endpoints can be exercised with curl. Returns null
@@ -21,7 +22,7 @@ function refusal({ authentic, secret, sent, envName, header }) {
 }
 
 function refuse(res, platform, reason) {
-  console.warn(`[webhook:${platform}] 401 ${reason}`);
+  log.warn('webhook', `401 ${reason}`, { platform });
   return res.status(401).json({ error: reason });
 }
 
@@ -36,17 +37,17 @@ function isTrigger(platform, event, payload) {
 async function accept(res, platform, event, identity, payload) {
   const what = `${logSafe(event)}${payload.action ? `.${logSafe(payload.action)}` : ''} from ${logSafe(identity.triggerUser || identity.triggerUserId)} in ${logSafe(identity.targetOrg)}`;
   if (!isTrigger(platform, event, payload)) {
-    console.log(`[webhook:${platform}] ${what}: ignored, not a trigger comment`);
+    log.info('webhook', `${what}: ignored, not a trigger comment`, { platform });
     return res.status(200).json({ status: 'ignored' });
   }
   const result = await whitelist.verify(platform, identity);
   if (!result.allowed) {
-    console.warn(`[webhook:${platform}] ${what}: 403 ${logSafe(result.reason)}`);
+    log.warn('webhook', `${what}: 403 ${logSafe(result.reason)}`, { platform });
     // The reason stays in the server log; telling the caller which check failed helps probing.
     return res.status(403).json({ error: 'Unauthorized' });
   }
   const task = await tasks.enqueue(platform, event, payload);
-  console.log(`[webhook:${platform}] ${what}: queued task ${task.id}`);
+  log.info('webhook', `${what}: queued task ${task.id}`, { platform, taskId: task.id });
   return res.status(200).json({ status: 'queued', taskId: task.id });
 }
 

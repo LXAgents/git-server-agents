@@ -5,6 +5,7 @@ const user = require('./routes/user');
 const auth = require('./routes/auth');
 const { cors } = require('./middleware/cors');
 const { HttpError } = require('./errors');
+const log = require('./services/logService');
 
 // Known Prisma request errors become client errors instead of 500s.
 function prismaError(err) {
@@ -36,7 +37,7 @@ function createApp() {
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
     const mapped = prismaError(err) || err;
-    if (!mapped.status || mapped.status >= 500) console.error('[app]', err);
+    if (!mapped.status || mapped.status >= 500) log.error('app', (err && err.stack) || String(err));
     res.status(mapped.status || 500).json({ error: mapped.expose ? mapped.message : 'Internal server error' });
   });
 

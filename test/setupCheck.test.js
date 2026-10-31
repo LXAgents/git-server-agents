@@ -26,7 +26,7 @@ test('warns when the database has no imported organization', async () => {
 
 test('logs the database and every warning, and survives a database error', async () => {
   const lines = [];
-  const log = { log: (l) => lines.push(l), warn: (l) => lines.push(l) };
+  const log = { info: (src, l) => lines.push(`[${src}] ${l}`), warn: (src, l) => lines.push(`[${src}] ${l}`) };
   const db = { appInstallation: { count: async () => { throw new Error('connection refused'); } } };
   const warnings = await run({ cfg: cfg(true, { clientId: 'Iv1' }), db, log });
   assert.equal(warnings.length, 2);

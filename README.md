@@ -156,6 +156,8 @@ the same way in `src/db.js`.
 | `WORKER_CONCURRENCY` | How many comments are answered at once (default 4) |
 | `MODEL_TIMEOUT_MS`, `TASK_TIMEOUT_MS` | Limits for one model call (default 60000) and one whole answer (default 240000) |
 | `PLATFORM_TIMEOUT_MS` | Limit for each GitHub or GitLab API call (default 30000) |
+| `LOG_RETENTION_DAYS` | Days stored log lines are kept for the dashboard's Logs page (default 14) |
+| `LOG_STORE` | `false` prints log lines without storing them |
 | `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | The **one** numeric GitHub or GitLab user ID that owns that platform (empty: no owner). A comma list stops the server at start |
 | `CORS_ORIGINS` | Origins allowed to call the APIs, e.g. the dashboard (default `http://localhost:5173`) |
 
@@ -174,6 +176,11 @@ reached the worker:
 - **Nothing in the log.** The delivery never reached the server: check the App's webhook URL.
 
 At start the server logs which database it uses and warns about both settings.
+
+Every log line is also stored in the `Log` table. The owner reads them on the dashboard's
+**Logs** page (`GET /api/admin/logs?level=warn&source=webhook&limit=100&before=<id>`), which
+shows the lines for the owner's platform and the server's own. Lines older than
+`LOG_RETENTION_DAYS` are deleted at start and every six hours.
 
 ## Run with Docker
 

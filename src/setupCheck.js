@@ -1,5 +1,6 @@
 const config = require('./config');
 const prisma = require('./db');
+const logs = require('./services/logService');
 
 // Settings that make the server refuse or ignore every webhook without saying so at the time.
 // Returns the warnings; `run` logs them at start.
@@ -20,15 +21,15 @@ async function orgWarnings(db = prisma) {
   return ['no organization is imported in this database yet: webhooks get 403 until one is imported from the dashboard'];
 }
 
-async function run({ cfg = config, db = prisma, log = console } = {}) {
-  log.log(`[setup] database: ${cfg.isProd ? 'PostgreSQL (PROD=prod)' : 'SQLite (prisma/dev.db)'}`);
+async function run({ cfg = config, db = prisma, log = logs } = {}) {
+  log.info('setup', `database: ${cfg.isProd ? 'PostgreSQL (PROD=prod)' : 'SQLite (prisma/dev.db)'}`);
   let warnings = secretWarnings(cfg);
   try {
     warnings = warnings.concat(await orgWarnings(db));
   } catch (err) {
     warnings.push(`could not read the database: ${err.message}`);
   }
-  for (const warning of warnings) log.warn(`[setup] ${warning}`);
+  for (const warning of warnings) log.warn('setup', warning);
   return warnings;
 }
 

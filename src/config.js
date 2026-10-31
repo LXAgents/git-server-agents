@@ -63,6 +63,11 @@ module.exports = {
     // How many comments are answered at the same time.
     concurrency: Math.max(1, Number(process.env.WORKER_CONCURRENCY) || 4),
   },
+  logs: {
+    // Log lines are also stored for the dashboard's Logs page, and deleted after this many days.
+    store: process.env.LOG_STORE !== 'false',
+    retentionDays: Math.max(1, Number(process.env.LOG_RETENTION_DAYS) || 14),
+  },
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')
     .split(',')

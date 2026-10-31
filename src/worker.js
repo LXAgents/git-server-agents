@@ -2,6 +2,7 @@ const config = require('./config');
 const prisma = require('./db');
 const agent = require('./services/agentService');
 const { logSafe } = require('./utils/strings');
+const log = require('./services/logService');
 
 function describe(err) {
   const response = err.response;
@@ -24,17 +25,18 @@ async function claim(task) {
 async function handle(task) {
   const started = Date.now();
   const label = `${task.id} ${task.platform}/${logSafe(task.event)}`;
-  console.log(`[worker] ${label} claimed`);
+  const meta = { platform: task.platform, taskId: task.id };
+  log.info('worker', `${label} claimed`, meta);
   try {
     const status = await agent.processTask(task);
     await prisma.agentTask.update({ where: { id: task.id }, data: { status } });
-    console.log(`[worker] ${label} -> ${status} in ${Date.now() - started}ms`);
+    log.info('worker', `${label} -> ${status} in ${Date.now() - started}ms`, meta);
   } catch (err) {
     await prisma.agentTask.update({
       where: { id: task.id },
       data: { status: 'failed', errorLog: describe(err).slice(0, 10000) },
     });
-    console.error(`[worker] ${label} -> failed in ${Date.now() - started}ms: ${logSafe(err.message)}`);
+    log.error('worker', `${label} -> failed in ${Date.now() - started}ms: ${logSafe(err.message)}`, meta);
   }
 }
 
@@ -68,7 +70,7 @@ async function requeueStale(now = Date.now()) {
     where: { status: 'processing', updatedAt: { lt: new Date(now - STALE_MS) } },
     data: { status: 'pending' },
   });
-  if (count) console.warn(`[worker] re-queued ${count} task(s) stuck in processing`);
+  if (count) log.warn('worker', `re-queued ${count} task(s) stuck in processing`);
   return count;
 }
 
@@ -92,7 +94,7 @@ function start({ pollMs = config.worker.pollMs, concurrency = config.worker.conc
         });
       }
     } catch (err) {
-      console.error('[worker] poll failed:', err.message);
+      log.error('worker', `poll failed: ${err.message}`);
     } finally {
       filling = false;
     }
@@ -103,9 +105,9 @@ function start({ pollMs = config.worker.pollMs, concurrency = config.worker.conc
     if (!stopped) timer = setTimeout(() => void tick(), pollMs);
   };
 
-  console.log(`[worker] polling every ${pollMs}ms, up to ${concurrency} tasks at once`);
+  log.info('worker', `polling every ${pollMs}ms, up to ${concurrency} tasks at once`);
   requeueStale()
-    .catch((err) => console.error('[worker] could not re-queue stale tasks:', err.message))
+    .catch((err) => log.error('worker', `could not re-queue stale tasks: ${err.message}`))
     .finally(() => {
       if (!stopped) void tick();
     });
