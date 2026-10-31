@@ -29,19 +29,18 @@ async function platformCaller(req) {
   return { ...user, token };
 }
 
-// The caller's whitelisted account, or null. The one configured owner ID is whitelisted, and
-// made owner, on first sign-in (see ownerService).
+// The caller's account, created as free on first sign-in. The one configured owner ID is made
+// owner (see ownerService).
 function findAccount(caller) {
   return owners.syncAccount(caller.platform, caller.id);
 }
 
 // Signs a request in with the caller's own GitHub or GitLab token. The caller must also be
-// whitelisted by hand, unless their ID is the platform's configured owner.
+// Anyone with a GitHub or GitLab account can sign in: sign-up is open.
 async function userAuth(req, _res, next) {
   try {
     const caller = await platformCaller(req);
     const account = await findAccount(caller);
-    if (!account) throw new HttpError(403, 'user is not whitelisted');
     req.user = { ...caller, account, role: account.role };
     return next();
   } catch (err) {

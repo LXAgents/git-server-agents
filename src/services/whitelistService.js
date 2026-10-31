@@ -1,9 +1,9 @@
 const prisma = require('../db');
 
-// Zero trust: the apps are public, so every event is rejected unless both the org and the
-// user that triggered it were added to the database by hand.
-// Users are matched on their immutable platform id, not their login, because a login can be
-// renamed and then claimed by someone else.
+// The apps are public, so an event is only acted on in an org (or personal account) that its
+// owner imported through the dashboard, and only for that org's own App installation. Who
+// commented is not checked here: anyone can log in with GitHub or GitLab. Which OpenRouter keys
+// a commenter may use is decided per comment (see keyService and agentService).
 async function verify(platform, identity) {
   const { triggerUserId, targetOrg, installationId } = identity;
   if (!triggerUserId || !targetOrg) {
@@ -14,7 +14,7 @@ async function verify(platform, identity) {
     where: { platform_orgName: { platform, orgName: targetOrg } },
   });
   if (!installation) {
-    return { allowed: false, reason: `org ${targetOrg} is not whitelisted` };
+    return { allowed: false, reason: `org ${targetOrg} is not imported` };
   }
   if (installation.installationId && installationId && installation.installationId !== installationId) {
     return { allowed: false, reason: `installation ${installationId} does not match org ${targetOrg}` };
@@ -23,11 +23,6 @@ async function verify(platform, identity) {
   const account = await prisma.account.findUnique({
     where: { type_id: { type: platform, id: triggerUserId } },
   });
-  if (!account) {
-    // The org is imported, so the agent may reply there to say so (see agentService).
-    return { allowed: false, reason: `user ${identity.triggerUser || triggerUserId} is not whitelisted`, installation };
-  }
-
   return { allowed: true, installation, account };
 }
 

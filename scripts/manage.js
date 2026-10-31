@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Manual whitelist management. The webhook endpoints never create these rows themselves.
+// Manual user and org management from the server host.
 //
 //   node scripts/manage.js add-account <github|gitlab> <userId> [username]
 //   node scripts/manage.js add-org <github|gitlab> <orgName> <ownerUserId> [installationId]
@@ -99,7 +99,7 @@ const commands = {
     const installation = await prisma.appInstallation.findUnique({
       where: { platform_orgName: { platform, orgName: required(orgName, 'orgName') } },
     });
-    if (!installation) throw new Error(`${platform} org ${orgName} is not whitelisted`);
+    if (!installation) throw new Error(`${platform} org ${orgName} is not imported`);
     const key = await createKey({ appInstallationId: installation.id }, apiKey, priority, providerName);
     console.log(`key ${key.id} added for ${platform} org ${orgName} (priority ${key.priority})`);
   },

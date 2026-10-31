@@ -7,7 +7,7 @@ const { toComment } = require('../services/eventService');
 const { parseComment } = require('../services/commentParser');
 const { logSafe } = require('../utils/strings');
 
-// Without a secret anyone could forge a whitelisted sender, so production refuses to run
+// Without a secret anyone could forge an event, so production refuses to run
 // unsigned. Development allows it so the endpoints can be exercised with curl.
 function checkAuthenticity(authentic, secret) {
   if (secret) return authentic;
@@ -15,9 +15,8 @@ function checkAuthenticity(authentic, secret) {
   return true;
 }
 
-// A trigger comment from someone who isn't whitelisted, in an org that is imported.
-function isTriggerInImportedOrg(platform, event, payload, result) {
-  if (!result.installation) return false;
+// A new comment whose line 1 is a trigger (@agents or @vendor/model). Nothing else is queued.
+function isTrigger(platform, event, payload) {
   const comment = toComment(platform, event, payload);
   if (!comment) return false;
   const parsed = parseComment(comment.commentBody);
@@ -25,16 +24,19 @@ function isTriggerInImportedOrg(platform, event, payload, result) {
 }
 
 async function accept(res, platform, event, identity, payload) {
+  const what = `${logSafe(event)}${payload.action ? `.${logSafe(payload.action)}` : ''} from ${logSafe(identity.triggerUser || identity.triggerUserId)} in ${logSafe(identity.targetOrg)}`;
+  if (!isTrigger(platform, event, payload)) {
+    console.log(`[webhook:${platform}] ${what}: ignored, not a trigger comment`);
+    return res.status(200).json({ status: 'ignored' });
+  }
   const result = await whitelist.verify(platform, identity);
   if (!result.allowed) {
-    console.warn(`[webhook:${platform}] 403 ${logSafe(event)}: ${logSafe(result.reason)}`);
-    // The agent replies NOT_WHITELISTED there, so the commenter knows why nothing answers.
-    // Orgs nobody imported get nothing: the apps are public.
-    if (isTriggerInImportedOrg(platform, event, payload, result)) await tasks.enqueue(platform, event, payload);
+    console.warn(`[webhook:${platform}] ${what}: 403 ${logSafe(result.reason)}`);
     // The reason stays in the server log; telling the caller which check failed helps probing.
     return res.status(403).json({ error: 'Unauthorized' });
   }
   const task = await tasks.enqueue(platform, event, payload);
+  console.log(`[webhook:${platform}] ${what}: queued task ${task.id}`);
   return res.status(200).json({ status: 'queued', taskId: task.id });
 }
 

@@ -62,8 +62,15 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test('queues a signed event from a whitelisted user and org', async () => {
-  const res = await postGithub(payload(USER_ID, ORG));
+const triggerComment = (userId, org, installationId = 555, body = '@openrouter/free\nhi') => ({
+  ...payload(userId, org, installationId),
+  repository: { full_name: `${org}/web`, owner: { login: org } },
+  issue: { number: 1, title: 'Bug' },
+  comment: { id: 5, body, user: { login: 'alice', type: 'User' } },
+});
+
+test('queues a signed trigger comment in an imported org', async () => {
+  const res = await postGithub(triggerComment(USER_ID, ORG));
   assert.equal(res.status, 200);
   const { taskId } = await res.json();
   const task = await prisma.agentTask.findUnique({ where: { id: taskId } });
@@ -73,13 +80,20 @@ test('queues a signed event from a whitelisted user and org', async () => {
 });
 
 test('rejects a bad signature with 401', async () => {
-  const res = await postGithub(payload(USER_ID, ORG), { signature: 'sha256=00' });
+  const res = await postGithub(triggerComment(USER_ID, ORG), { signature: 'sha256=00' });
   assert.equal(res.status, 401);
 });
 
-test('rejects an unknown user, org or installation with 403 and queues nothing', async () => {
+test('anyone may trigger in an imported org: no account is needed to be queued', async () => {
   const before = await prisma.agentTask.count();
-  for (const body of [payload('stranger', ORG), payload(USER_ID, 'other-org'), payload(USER_ID, ORG, 999)]) {
+  const res = await postGithub(triggerComment('stranger', ORG));
+  assert.equal(res.status, 200);
+  assert.equal(await prisma.agentTask.count(), before + 1);
+});
+
+test('rejects a trigger in an org nobody imported, or from another installation, with 403', async () => {
+  const before = await prisma.agentTask.count();
+  for (const body of [triggerComment(USER_ID, 'other-org'), triggerComment(USER_ID, ORG, 999)]) {
     const res = await postGithub(body);
     assert.equal(res.status, 403);
     assert.deepEqual(await res.json(), { error: 'Unauthorized' });
@@ -87,24 +101,13 @@ test('rejects an unknown user, org or installation with 403 and queues nothing',
   assert.equal(await prisma.agentTask.count(), before);
 });
 
-const triggerComment = (userId, org) => ({
-  ...payload(userId, org),
-  repository: { full_name: `${org}/web`, owner: { login: org } },
-  issue: { number: 1, title: 'Bug' },
-  comment: { id: 5, body: '@openrouter/free\nhi', user: { login: 'stranger', type: 'User' } },
-});
-
-test('a trigger from a user who is not whitelisted, in an imported org, is queued for a NOT_WHITELISTED reply', async () => {
+test('ignores events that are not trigger comments, without queueing', async () => {
   const before = await prisma.agentTask.count();
-  const res = await postGithub(triggerComment('stranger', ORG));
-  assert.equal(res.status, 403);
-  assert.equal(await prisma.agentTask.count(), before + 1);
-});
-
-test('a trigger in an org nobody imported queues nothing', async () => {
-  const before = await prisma.agentTask.count();
-  const res = await postGithub(triggerComment('stranger', 'other-org'));
-  assert.equal(res.status, 403);
+  for (const body of [payload(USER_ID, ORG), triggerComment(USER_ID, ORG, 555, 'just a comment')]) {
+    const res = await postGithub(body);
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { status: 'ignored' });
+  }
   assert.equal(await prisma.agentTask.count(), before);
 });
 
