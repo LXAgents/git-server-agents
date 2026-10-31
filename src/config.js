@@ -9,7 +9,13 @@ const databaseUrl = isProd
   : `file:${path.join(__dirname, '..', 'prisma', 'dev.db')}`;
 
 const { trimTrailingSlashes: trimSlash } = require('./utils/strings');
-const idList = (value) => String(value || '').split(',').map((id) => id.trim()).filter(Boolean);
+// Each platform has at most one owner: the single numeric user ID in GITHUB_ADMIN_ID or
+// GITLAB_ADMIN_ID. A list is refused at start rather than silently cut down to one.
+function ownerId(name) {
+  const ids = String(process.env[name] || '').split(',').map((id) => id.trim()).filter(Boolean);
+  if (ids.length > 1) throw new Error(`${name} must be one numeric user ID: a platform has only one owner`);
+  return ids[0] || '';
+}
 const gitlabApiUrl = process.env.GITLAB_API_URL || 'https://gitlab.com/api/v4';
 
 module.exports = {
@@ -27,8 +33,8 @@ module.exports = {
     privateKey: (process.env.GITHUB_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
     apiUrl: process.env.GITHUB_API_URL || 'https://api.github.com',
     webUrl: trimSlash(process.env.GITHUB_URL || 'https://github.com'),
-    // Numeric GitHub user IDs whose own token opens the admin API.
-    adminIds: idList(process.env.GITHUB_ADMIN_ID),
+    // The GitHub owner's numeric user ID, or '' for no owner.
+    ownerId: ownerId('GITHUB_ADMIN_ID'),
   },
   gitlab: {
     webhookSecret: process.env.GITLAB_WEBHOOK_SECRET || '',
@@ -37,8 +43,8 @@ module.exports = {
     clientSecret: process.env.GITLAB_CLIENT_SECRET || '',
     apiUrl: gitlabApiUrl,
     webUrl: trimSlash(process.env.GITLAB_URL || gitlabApiUrl.replace(/\/api\/v4\/?$/, '')),
-    // Numeric GitLab user IDs whose own token opens the admin API.
-    adminIds: idList(process.env.GITLAB_ADMIN_ID),
+    // The GitLab owner's numeric user ID, or '' for no owner.
+    ownerId: ownerId('GITLAB_ADMIN_ID'),
   },
   ai: {
     // What "@agents" uses when no repo, org or user model is set.
