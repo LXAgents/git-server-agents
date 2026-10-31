@@ -58,3 +58,20 @@ status: in-progress
 - Checked with curl on SQLite: signed whitelisted event 200 + queued, bad signature 401,
   unknown user 403, unknown GitLab group 403.
 - dotenv 17 logs on load, so every `config()` call passes `quiet: true`.
+
+### Task 4 — feat/worker
+
+- `src/worker.js` polls pending `AgentTask` rows, claims each with a conditional update so
+  parallel workers never double-answer, and stores `success`, `skipped` or `failed`
+  (with `errorLog`). It runs inside the server by default, or alone via `npm run worker`.
+- `src/services/agentService.js`: normalise the comment -> parse the model line -> recheck
+  the whitelist -> fetch the PR diff (GitHub `application/vnd.github.v3.diff` with an App
+  installation token, GitLab `/merge_requests/:iid/diffs`) -> pick an OpenRouter key
+  (trigger user first, then the org owner) -> call chat completions -> post the reply.
+- `@vendor/model` on line 1 selects the model; a line without `/` is treated as a mention.
+- Keys are AES-256-GCM encrypted with `ENCRYPTION_KEY`; `scripts/manage.js add-key` stores them.
+- Replies carry a hidden marker so the agent never answers its own comments.
+- Checked end to end against a local mock of the GitHub API and OpenRouter: JWT verified,
+  diff fetched with the diff media type, chosen model and decrypted key sent, reply posted;
+  a marked comment and a `pull_request` event were skipped.
+- Not done: tasks left in `processing` by a crash are not re-queued automatically.
