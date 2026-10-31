@@ -1,0 +1,67 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  type          String
+  id            String
+  username      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  keys          AccountKey[]
+  installations AppInstallation[]
+  @@id([type, id])
+}
+
+model Provider {
+  id          String       @id @default(cuid())
+  displayName String
+  url         String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  keys        AccountKey[]
+}
+
+model AccountKey {
+  id              String   @id @default(cuid())
+  accountType     String
+  accountId       String
+  providerId      String
+  apiKeyEncrypted String
+  isActive        Boolean  @default(true)
+  priority        Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  account         Account  @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  provider        Provider @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  @@index([accountType, accountId])
+}
+
+model AppInstallation {
+  id             String   @id @default(cuid())
+  platform       String
+  orgName        String
+  installationId String?
+  accountType    String
+  accountId      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  account        Account  @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  @@unique([platform, orgName])
+}
+
+model AgentTask {
+  id          String   @id @default(cuid())
+  platform    String
+  event       String
+  status      String   @default("pending")
+  payload     String
+  errorLog    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
