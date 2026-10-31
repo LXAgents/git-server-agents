@@ -40,6 +40,8 @@ test('checks ownership live: admins and owners pass, members and strangers do no
   assert.equal(await platforms.isOwner('github', 'gh-bob', bob, 'BOB'), true);
   assert.equal(await platforms.isOwner('gitlab', 'gl-carol', { id: '7', login: 'carol' }, 'grp'), true);
   assert.equal(await platforms.isOwner('gitlab', 'gl-dave', { id: '8', login: 'dave' }, 'grp'), false);
+  // An ID that isn't a plain number never reaches the URL.
+  assert.equal(await platforms.isOwner('gitlab', 'gl-carol', { id: '7/../../users', login: 'carol' }, 'grp'), false);
 });
 
 test('finds the GitHub App installation for an org or user, or null', async () => {

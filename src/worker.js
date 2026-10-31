@@ -46,18 +46,22 @@ function start({ pollMs = config.worker.pollMs } = {}) {
   let timer = null;
   let stopped = false;
 
+  // Drains the queue before going back to sleep. `stopped` is set by the returned stop()
+  // while a batch is running.
   const tick = async () => {
     try {
-      // Drain the queue before going back to sleep.
-      while (!stopped && (await runOnce()) > 0);
+      let processed;
+      do {
+        processed = await runOnce();
+      } while (processed > 0 && !stopped);
     } catch (err) {
       console.error('[worker] poll failed:', err.message);
     }
-    if (!stopped) timer = setTimeout(tick, pollMs);
+    if (!stopped) timer = setTimeout(() => void tick(), pollMs);
   };
 
   console.log(`[worker] polling every ${pollMs}ms`);
-  tick();
+  void tick();
   return () => {
     stopped = true;
     clearTimeout(timer);

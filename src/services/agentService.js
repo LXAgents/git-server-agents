@@ -38,11 +38,15 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 }
 
 // Our replies carry REPLY_MARKER and end with a "Model:" footer; both are noise for the model.
+// The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
+// linear on any comment body.
+const FOOTER_START = '<sub>Model: `';
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>\s*$/;
 function stripReply(body) {
-  return body
-    .replace(REPLY_MARKER, '')
-    .replace(/\n*<sub>Model: `[^`]*`<\/sub>\s*$/m, '')
-    .trim();
+  const text = body.replace(REPLY_MARKER, '').trim();
+  const start = text.lastIndexOf(FOOTER_START);
+  if (start !== -1 && FOOTER.test(text.slice(start))) return text.slice(0, start).trim();
+  return text;
 }
 
 // A user's earlier request starts with its "@vendor/model" line; keep only the question.
