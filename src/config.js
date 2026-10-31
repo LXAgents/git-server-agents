@@ -41,8 +41,10 @@ module.exports = {
     adminIds: idList(process.env.GITLAB_ADMIN_ID),
   },
   ai: {
-    // Only a suggestion now: comments must name their model on line 1.
+    // What "@agents" uses when no repo, org or user model is set.
     defaultModel: process.env.DEFAULT_MODEL || 'openrouter/free',
+    // Where the dashboard's model list comes from.
+    openRouterUrl: trimSlash(process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1'),
     providerName: 'OpenRouter',
     maxDiffChars: Number(process.env.MAX_DIFF_CHARS) || 100000,
   },

@@ -7,6 +7,8 @@ const gitlab = require('../src/services/gitlabService');
 const whitelist = require('../src/services/whitelistService');
 const keys = require('../src/services/keyService');
 const openRouter = require('../src/services/openRouterService');
+const models = require('../src/services/modelService');
+const repoStore = require('../src/services/repoStore');
 const { processTask } = require('../src/services/agentService');
 const { REPLY_MARKER } = require('../src/services/eventService');
 
@@ -25,8 +27,11 @@ function githubTask(body, { org = true } = {}) {
   return { id: 't1', platform: 'github', event: 'issue_comment', payload: JSON.stringify(payload) };
 }
 
-function stubAll(t, { member = true, history = [] } = {}) {
+function stubAll(t, { member = true, history = [], repository = null, collaborator = false, stored = 'openrouter/free' } = {}) {
   const calls = { keys: [], posted: [], members: [], complete: [] };
+  t.mock.method(repoStore, 'findForEvent', async () => repository);
+  t.mock.method(models, 'resolveModel', async () => ({ model: stored, source: 'user' }));
+  t.mock.method(github, 'isCollaborator', async () => collaborator);
   t.mock.method(whitelist, 'verify', async () => ({ allowed: true, installation, account: {} }));
   t.mock.method(github, 'installationToken', async () => 'inst-token');
   t.mock.method(github, 'listIssueComments', async () => history);
@@ -36,8 +41,8 @@ function stubAll(t, { member = true, history = [] } = {}) {
   });
   t.mock.method(github, 'getRepoTree', async () => ({ paths: ['src/app.js'], truncated: false }));
   t.mock.method(github, 'postComment', async (repo, number, body) => calls.posted.push({ repo, number, body }));
-  t.mock.method(keys, 'getProviderKeys', async (_name, account, inst) => {
-    calls.keys.push({ account, inst });
+  t.mock.method(keys, 'getProviderKeys', async (_name, account, inst, repo) => {
+    calls.keys.push({ account, inst, repo });
     return { provider: { url: 'https://or.test' }, keys: [{ id: 'k1', owner: 'user', apiKey: 'sk-user' }] };
   });
   t.mock.method(openRouter, 'complete', async (req) => {
@@ -48,9 +53,9 @@ function stubAll(t, { member = true, history = [] } = {}) {
   return calls;
 }
 
-test('a comment without @vendor/model on line 1 is skipped before any API call', async (t) => {
+test('a comment without @agents or @vendor/model on line 1 is skipped before any API call', async (t) => {
   const calls = stubAll(t);
-  for (const body of ['What files do I have?', '@alice what do you think?', '@openrouter/free']) {
+  for (const body of ['What files do I have?', '@alice what do you think?', '@openrouter/free', '@agents']) {
     assert.equal(await processTask(githubTask(body)), 'skipped');
   }
   assert.equal(whitelist.verify.mock.callCount(), 0);
@@ -133,4 +138,64 @@ test('a GitLab MR reads notes, the diff and files at the MR head commit', async 
   assert.deepEqual(refs, ['headsha']);
   assert.deepEqual(gitlab.isGroupMember.mock.calls[0].arguments, ['grp', '7']);
   assert.deepEqual(keys.getProviderKeys.mock.calls[0].arguments[2], installation);
+});
+
+test('@agents uses the stored model, and the footer names it', async (t) => {
+  const calls = stubAll(t, { stored: 'anthropic/claude-x' });
+  assert.equal(await processTask(githubTask('@agents what changed?')), 'success');
+  assert.equal(calls.complete[0].model, 'anthropic/claude-x');
+  assert.equal(models.resolveModel.mock.calls[0].arguments[0].account.id, '1001');
+  assert.match(calls.posted[0].body, /Model: `anthropic\/claude-x`/);
+});
+
+test('@vendor/model overrides the stored model', async (t) => {
+  const calls = stubAll(t, { stored: 'anthropic/claude-x' });
+  await processTask(githubTask('@openai/gpt-5 why?'));
+  assert.equal(calls.complete[0].model, 'openai/gpt-5');
+  assert.equal(models.resolveModel.mock.callCount(), 0);
+});
+
+test('repo keys go to org members without another check', async (t) => {
+  const repository = { id: 'repo-row' };
+  const calls = stubAll(t, { member: true, repository });
+  await processTask(githubTask('@agents hi'));
+  assert.equal(calls.keys[0].repo, repository);
+  assert.equal(github.isCollaborator.mock.callCount(), 0);
+});
+
+test('repo keys go to a collaborator who is not an org member, but org keys do not', async (t) => {
+  const repository = { id: 'repo-row' };
+  const calls = stubAll(t, { member: false, collaborator: true, repository });
+  await processTask(githubTask('@agents hi'));
+  assert.deepEqual(github.isCollaborator.mock.calls[0].arguments, ['acme/web', 'alice', 'inst-token']);
+  assert.equal(calls.keys[0].repo, repository);
+  assert.equal(calls.keys[0].inst, null);
+});
+
+test('someone outside the repo and org gets only their own keys', async (t) => {
+  const calls = stubAll(t, { member: false, collaborator: false, repository: { id: 'repo-row' } });
+  await processTask(githubTask('@agents hi'));
+  assert.equal(calls.keys[0].repo, null);
+  assert.equal(calls.keys[0].inst, null);
+});
+
+test('a GitLab project member gets the repo keys', async (t) => {
+  const repository = { id: 'repo-row' };
+  const calls = stubAll(t, { repository });
+  t.mock.method(gitlab, 'listNotes', async () => []);
+  t.mock.method(gitlab, 'groupExists', async () => true);
+  t.mock.method(gitlab, 'isGroupMember', async () => false);
+  t.mock.method(gitlab, 'isProjectMember', async () => true);
+  t.mock.method(gitlab, 'getRepoTree', async () => ({ paths: [], truncated: false }));
+  t.mock.method(gitlab, 'postNote', async () => {});
+  const payload = {
+    project: { id: 12, path_with_namespace: 'grp/app', default_branch: 'main' },
+    user: { id: 8, username: 'dave' },
+    object_attributes: { id: 6, note: '@agents\nhi', noteable_type: 'Issue', action: 'create' },
+    issue: { iid: 2, title: 'Issue' },
+  };
+  assert.equal(await processTask({ id: 't3', platform: 'gitlab', event: 'note', payload: JSON.stringify(payload) }), 'success');
+  assert.deepEqual(gitlab.isProjectMember.mock.calls[0].arguments, [12, '8']);
+  assert.equal(calls.keys[0].repo, repository);
+  assert.equal(calls.keys[0].inst, null);
 });

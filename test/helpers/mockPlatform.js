@@ -15,6 +15,25 @@ const githubMemberships = {
 };
 const githubInstallations = { 'orgs/acme': 555, 'users/alice': 777 };
 
+// login -> repos the user can see, with their admin flag
+const githubRepos = {
+  alice: [
+    { id: 301, full_name: 'acme/web', owner: { login: 'acme' }, permissions: { admin: true } },
+    { id: 302, full_name: 'acme/docs', owner: { login: 'acme' }, permissions: { admin: false } },
+    { id: 303, full_name: 'beta/app', owner: { login: 'beta' }, permissions: { admin: true } },
+  ],
+  bob: [{ id: 301, full_name: 'acme/web', owner: { login: 'acme' }, permissions: { admin: false } }],
+};
+// GitLab project id -> path and user id -> access level
+const gitlabProjects = { 41: { path: 'grp/app', members: { 7: 50, 8: 30 } } };
+
+// OpenRouter's /models answer.
+const openRouterModels = [
+  { id: 'openai/gpt-5', name: 'GPT-5', context_length: 400000, pricing: { prompt: '0.00000125', completion: '0.00001' }, architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } },
+  { id: 'openrouter/free', name: 'Free Models Router', context_length: 200000, pricing: { prompt: '0', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['text'] } },
+  { id: 'google/imagen', name: 'Imagen', pricing: { prompt: '0.1', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
+];
+
 const gitlabUsers = { 'gl-carol': { id: 7, username: 'carol' }, 'gl-dave': { id: 8, username: 'dave' } };
 // group -> user id -> access level
 const gitlabMembers = { grp: { 7: 50, 8: 30 } };
@@ -49,6 +68,11 @@ function createMockPlatform() {
     const role = (githubMemberships[req.user.login] || {})[req.params.org];
     return role ? res.json({ state: 'active', role }) : res.status(404).json({ message: 'Not Found' });
   });
+  gh.get('/user/repos', (req, res) => res.json(Number(req.query.page) > 1 ? [] : githubRepos[req.user.login] || []));
+  gh.get('/repos/:owner/:name', (req, res) => {
+    const repo = (githubRepos[req.user.login] || []).find((r) => r.full_name === `${req.params.owner}/${req.params.name}`);
+    return repo ? res.json(repo) : res.status(404).json({ message: 'Not Found' });
+  });
   gh.get('/:kind/:name/installation', (req, res) => {
     if (!/^Bearer [\w-]+\.[\w-]+\.[\w-]+$/.test(req.get('authorization') || '')) return res.status(401).end();
     const id = githubInstallations[`${req.params.kind}/${req.params.name}`];
@@ -66,6 +90,17 @@ function createMockPlatform() {
       .filter(([, members]) => (members[req.user.id] || 0) >= min)
       .map(([path]) => ({ full_path: path }));
     res.json(Number(req.query.page) > 1 ? [] : groups);
+  });
+  gl.get('/projects', (req, res) => {
+    const min = Number(req.query.min_access_level) || 0;
+    const projects = Object.entries(gitlabProjects)
+      .filter(([, p]) => (p.members[req.user.id] || 0) >= min)
+      .map(([id, p]) => ({ id: Number(id), path_with_namespace: p.path }));
+    res.json(Number(req.query.page) > 1 ? [] : projects);
+  });
+  gl.get('/projects/:id/members/all/:userId', (req, res) => {
+    const level = ((gitlabProjects[req.params.id] || {}).members || {})[req.params.userId];
+    return level ? res.json({ id: Number(req.params.userId), access_level: level }) : res.status(404).json({ message: '404 Not found' });
   });
   gl.get('/groups/:group/members/all/:userId', (req, res) => {
     const level = (gitlabMembers[req.params.group] || {})[req.params.userId];
@@ -85,6 +120,7 @@ function createMockPlatform() {
     return token ? res.json({ access_token: token, token_type: 'Bearer' }) : res.status(400).json({ error: 'invalid_grant' });
   });
 
+  app.get('/or/models', (_req, res) => res.json({ data: openRouterModels }));
   app.use('/gh', gh);
   app.use('/gl', gl);
   return app;
@@ -97,6 +133,7 @@ async function startMockPlatform() {
   const base = `http://127.0.0.1:${server.address().port}`;
   const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   process.env.GITHUB_API_URL = `${base}/gh`;
+  process.env.OPENROUTER_API_URL = `${base}/or`;
   process.env.GITLAB_API_URL = `${base}/gl`;
   process.env.GITHUB_URL = `${base}/ghweb`;
   process.env.GITLAB_URL = `${base}/glweb`;

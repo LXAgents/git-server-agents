@@ -121,7 +121,19 @@ async function isOrgMember(org, login, token) {
   return res.status === 204;
 }
 
+// Whether `login` is a collaborator on `repo` ("owner/name"), which on an org repo includes
+// org members with access. 204 is yes, 404 is no. Needs only the App's Metadata permission.
+async function isCollaborator(repo, login, token) {
+  const [owner, name] = String(repo).split('/');
+  const res = await axios.get(
+    `${config.github.apiUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/collaborators/${encodeURIComponent(login)}`,
+    { headers: headers(token), validateStatus: (status) => [204, 404].includes(status) }
+  );
+  return res.status === 204;
+}
+
 module.exports = {
+  isCollaborator,
   appJwt,
   installationToken,
   getPullDiff,

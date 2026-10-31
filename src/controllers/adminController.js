@@ -2,6 +2,7 @@
 // because they come in by import (see userController).
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
+const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
 const { HttpError } = require('../errors');
 
@@ -52,7 +53,7 @@ async function deleteAccount(req, res) {
 
 async function listOrgs(_req, res) {
   const rows = await prisma.appInstallation.findMany({
-    include: { account: true, _count: { select: { keys: true } } },
+    include: { account: true, models: true, _count: { select: { keys: true } } },
     orderBy: [{ platform: 'asc' }, { orgName: 'asc' }],
   });
   res.json(rows.map(orgView));
@@ -66,12 +67,23 @@ function orgView(o) {
     installationId: o.installationId,
     owner: { platform: o.accountType, id: o.accountId, username: o.account ? o.account.username : null },
     keyCount: o._count ? o._count.keys : undefined,
+    models: o.models ? Object.fromEntries(o.models.map((m) => [m.modality, m.model])) : undefined,
     createdAt: o.createdAt,
   };
 }
 
 async function deleteOrg(req, res) {
   await prisma.appInstallation.delete({ where: { id: req.params.id } });
+  res.sendStatus(204);
+}
+
+async function listRepos(_req, res) {
+  const rows = await prisma.repository.findMany({ include: viewInclude, orderBy: [{ platform: 'asc' }, { fullName: 'asc' }] });
+  res.json(rows.map(repoView));
+}
+
+async function deleteRepo(req, res) {
+  await prisma.repository.delete({ where: { id: req.params.id } });
   res.sendStatus(204);
 }
 
@@ -110,6 +122,8 @@ module.exports = {
   deleteAccount,
   listOrgs,
   deleteOrg,
+  listRepos,
+  deleteRepo,
   listKeys,
   createKey,
   deleteKey,

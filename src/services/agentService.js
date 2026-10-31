@@ -2,7 +2,9 @@ const config = require('../config');
 const { githubIdentity, gitlabIdentity } = require('./identityService');
 const whitelist = require('./whitelistService');
 const { toComment, REPLY_MARKER } = require('./eventService');
-const { parseComment, MODEL_LINE } = require('./commentParser');
+const { parseComment, stripTrigger } = require('./commentParser');
+const models = require('./modelService');
+const repoStore = require('./repoStore');
 const github = require('./githubService');
 const gitlab = require('./gitlabService');
 const keys = require('./keyService');
@@ -50,14 +52,6 @@ function stripReply(body) {
   return text;
 }
 
-// A user's earlier request starts with its "@vendor/model" line; keep only the question.
-function stripModelLine(body) {
-  const text = body.replace(/\r\n/g, '\n');
-  const newline = text.indexOf('\n');
-  const first = (newline === -1 ? text : text.slice(0, newline)).trim();
-  return MODEL_LINE.test(first) ? (newline === -1 ? '' : text.slice(newline + 1)).trim() : text.trim();
-}
-
 // Earlier comments as chat messages, oldest first: our replies are "assistant", everyone else
 // is "user" with their @login. The comment being answered is left out (it goes last), and the
 // oldest messages are dropped once the history passes `maxChars`.
@@ -70,7 +64,7 @@ function buildHistory(comments, currentCommentId, maxChars = MAX_HISTORY_CHARS) 
       const content = stripReply(body);
       if (content) messages.push({ role: 'assistant', content });
     } else {
-      const content = stripModelLine(body);
+      const content = stripTrigger(body);
       if (content) messages.push({ role: 'user', content: `@${c.author || 'unknown'}: ${content}` });
     }
   }
@@ -177,6 +171,19 @@ async function isOrgMember(platform, identity, payload, token) {
   }
 }
 
+// Repo keys are spent only for people in the repo: a collaborator (GitHub), a project member
+// (GitLab), or a member of its org. Any failure to confirm counts as "no".
+async function isRepoMember(platform, identity, comment, orgMember, token) {
+  if (orgMember) return true;
+  try {
+    if (platform === 'github') return await github.isCollaborator(comment.repo, identity.triggerUser, token);
+    return await gitlab.isProjectMember(comment.projectId, identity.triggerUserId);
+  } catch (err) {
+    console.warn(`[agent] could not confirm ${logSafe(identity.triggerUser)} in the repository: ${logSafe(err.message)}`);
+    return false;
+  }
+}
+
 // The commit files are read at: the PR/MR head, or the default branch for an issue.
 async function resolveRef(platform, comment, token) {
   if (comment.headSha) return comment.headSha;
@@ -193,10 +200,11 @@ async function processTask(task) {
   const comment = toComment(task.platform, task.event, payload);
   if (!comment) return 'skipped';
 
-  // The agent only answers when line 1 names the model, e.g. "@openrouter/free".
-  const { model, prompt } = parseComment(comment.commentBody);
-  if (!model || !prompt) {
-    console.info(`[agent] task ${task.id} skipped: line 1 must name a model, such as @${config.ai.defaultModel}, followed by a question`);
+  // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
+  const parsed = parseComment(comment.commentBody);
+  const { prompt } = parsed;
+  if (!(parsed.auto || parsed.model) || !prompt) {
+    console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model, followed by a question`);
     return 'skipped';
   }
 
@@ -219,15 +227,21 @@ async function processTask(task) {
     history = await gitlab.listNotes(comment.projectId, comment.kind, comment.number);
   }
 
+  const account = { type: task.platform, id: identity.triggerUserId };
+  const repository = await repoStore.findForEvent(task.platform, payload, access.installation);
+  const model = parsed.model || (await models.resolveModel({ repository, installation: access.installation, account })).model;
+
   const member = await isOrgMember(task.platform, identity, payload, token);
+  const repoMember = repository ? await isRepoMember(task.platform, identity, comment, member, token) : false;
   const { provider, keys: candidates } = await keys.getProviderKeys(
     config.ai.providerName,
-    { type: task.platform, id: identity.triggerUserId },
-    member ? access.installation : null
+    account,
+    member ? access.installation : null,
+    repoMember ? repository : null
   );
   if (candidates.length === 0) {
-    const orgNote = member ? `or org ${identity.targetOrg}` : `(org keys need membership of ${identity.targetOrg})`;
-    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId} ${orgNote}`);
+    const orgNote = member ? `, repo or org ${identity.targetOrg}` : ` (repo and org keys need membership of ${identity.targetOrg})`;
+    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId}${orgNote}`);
   }
 
   const ref = await resolveRef(task.platform, comment, token);
@@ -255,4 +269,4 @@ async function processTask(task) {
   return 'success';
 }
 
-module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember };
+module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };

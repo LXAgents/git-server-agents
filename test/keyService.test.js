@@ -11,6 +11,7 @@ const { getProviderKeys } = require('../src/services/keyService');
 
 const USER = { type: 'github', id: 'keysvc-user' };
 let installation;
+let repository;
 let provider;
 
 test.before(async () => {
@@ -19,6 +20,9 @@ test.before(async () => {
   await prisma.account.create({ data: { type: USER.type, id: USER.id } });
   installation = await prisma.appInstallation.create({
     data: { platform: 'github', orgName: 'keysvc-org', accountType: USER.type, accountId: USER.id },
+  });
+  repository = await prisma.repository.create({
+    data: { platform: 'github', externalId: 'keysvc-repo', fullName: 'keysvc-org/web', appInstallationId: installation.id },
   });
   const add = (owner, plain, priority, isActive = true) =>
     prisma.accountKey.create({
@@ -31,6 +35,7 @@ test.before(async () => {
   await add(user, 'user-off', 99, false);
   await add(org, 'org-high', 50);
   await add(org, 'org-low', 0);
+  await add({ repositoryId: repository.id }, 'repo-key', 0);
   await prisma.accountKey.create({
     data: { ...org, providerId: provider.id, apiKeyEncrypted: 'v1:not:valid:data', priority: 100 },
   });
@@ -41,18 +46,25 @@ test.after(async () => {
   await prisma.$disconnect();
 });
 
-test('returns user keys then org keys, each by priority, skipping inactive and unreadable', async (t) => {
+test('returns repo keys, then org keys, then user keys, each by priority, skipping inactive and unreadable', async (t) => {
   t.mock.method(console, 'warn', () => {});
-  const { keys } = await getProviderKeys('OpenRouter', USER, installation);
+  const { keys } = await getProviderKeys('OpenRouter', USER, installation, repository);
   assert.deepEqual(
     keys.map((k) => [k.owner, k.apiKey]),
     [
-      ['user', 'user-high'],
-      ['user', 'user-low'],
+      ['repo', 'repo-key'],
       ['org', 'org-high'],
       ['org', 'org-low'],
+      ['user', 'user-high'],
+      ['user', 'user-low'],
     ]
   );
+});
+
+test('leaves out the repo and org keys when the commenter may not use them', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const { keys } = await getProviderKeys('OpenRouter', USER, null, null);
+  assert.deepEqual(keys.map((k) => k.owner), ['user', 'user']);
 });
 
 test('works with only a user or only an org', async () => {

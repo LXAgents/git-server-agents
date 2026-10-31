@@ -19,24 +19,32 @@ all come from the REST APIs.
    Either missing: **403**. The apps are public, so nothing is trusted that was not added
    by hand.
 3. The payload is stored as a `pending` `AgentTask` and the request returns **200** at once.
-4. The worker claims the task and skips it unless line 1 names a model (see below). It
+4. The worker claims the task and skips it unless line 1 starts with `@agents` or names a
+   model (see below). It
    re-checks the whitelist, then fetches the diff (PRs and MRs only) and the last 30 comments.
    It calls OpenRouter and posts the reply. The task ends as `success`, `skipped` or `failed`
    (see `errorLog`).
 
 ## Asking the agent
 
-Line 1 of the comment must be `@vendor/model`. That OpenRouter model answers, and the rest of
-the comment is the question:
+Start line 1 of the comment with `@agents` or with an OpenRouter model, `@vendor/model`. The
+question can follow on the same line or on the next lines:
 
 ```
-@openrouter/free
-What files do I have under src/services, and what does agentService.js do?
+@agents What files do I have under src/services, and what does agentService.js do?
 ```
 
-A comment without a model line gets no answer, and neither does one whose first line is a
-user mention such as `@alice`. `DEFAULT_MODEL` is only the suggestion shown in the log when a
-comment is skipped.
+```
+@openai/gpt-5
+Review this diff.
+```
+
+- **`@agents`** uses the stored model: the repository's, then the org's, then the commenting
+  user's, then `DEFAULT_MODEL` (`openrouter/free`). Models are set in the dashboard or the user
+  API, per modality; the agent uses the `text` one.
+- **`@vendor/model`** uses that model, whatever is stored.
+- A comment that starts any other way gets no answer, and neither does one whose first line is a
+  user mention such as `@alice`.
 
 - **Conversation:** the last 30 comments on the issue, PR or MR are sent as chat history.
   The agent's own replies count as `assistant`, everyone else as `user` with their `@login`.
@@ -47,18 +55,21 @@ comment is skipped.
   - Files are cut at 40,000 characters and the list at 2,000 paths.
   - If the model doesn't support tools, the agent asks again without them. That second request
     includes the file list and any files the question names.
-- **Org keys need org membership.** The triggering user's own keys are always tried first. The
-  org's keys are added only when the platform confirms the user is a member of that org:
-  - On GitHub, through the App's "Members: read" permission.
-  - On GitLab, through the bot token.
-  - On a personal account, the user must be its owner.
+- **Keys: repository, then org, then the user's own.**
+  - **Repository keys** are used only when the commenter is a collaborator on the repository
+    (GitHub), a member of the project (GitLab), or a member of its org.
+  - **Org keys** are used only when the platform confirms the commenter is a member of the org:
+    on GitHub through the App's "Members: read" permission, on GitLab through the bot token. On
+    a personal account, the commenter must be its owner.
+  - **The commenter's own keys** come last.
 
-  If membership can't be confirmed, only the user's own keys are used.
+  If membership can't be confirmed, those keys are skipped. If a key fails, the next is tried.
 
 The GitHub App needs these repository permissions:
 
 - **Contents: read**, for files.
 - **Issues: read and write** and **Pull requests: read and write**, for comments and diffs.
+- **Metadata: read** (every App has it), to check repository collaborators.
 - **Members: read**, an organization permission.
 
 The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes).
@@ -93,7 +104,8 @@ the same way in `src/db.js`.
 | `GITHUB_URL`, `GITLAB_URL` | Web addresses for OAuth (default `https://github.com`, and `GITLAB_API_URL` without `/api/v4`). Change them only for GitHub Enterprise or self-managed GitLab |
 | `PUBLIC_URL` | This server's public address, used for the OAuth callback URL. Set it behind a proxy or on a platform |
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
-| `DEFAULT_MODEL` | Suggested model shown in the log when a comment names none (default `openrouter/free`). Comments must name their model |
+| `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter/free`) |
+| `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `ADMIN_TOKEN` | Operator token for `/api/admin`; unset closes this way in |
 | `GITHUB_ADMIN_ID`, `GITLAB_ADMIN_ID` | Numeric GitHub or GitLab user IDs (comma-separated) that get admin control when they sign in |
@@ -173,7 +185,7 @@ user API. Roles are never stored; ownership is asked of GitHub or GitLab on ever
 |---|---|---|
 | Operator | `Authorization: Bearer $ADMIN_TOKEN` on `/api/admin` | Whitelist and remove users; list and delete orgs; add and delete any key |
 | Admin user | Their own platform token (`X-Platform` + `Authorization`) on `/api/admin`, when their user ID is in `GITHUB_ADMIN_ID` or `GITLAB_ADMIN_ID` | The same as the operator |
-| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys; import orgs they own; manage keys of orgs they own |
+| Whitelisted user | `X-Platform: github\|gitlab` + `Authorization: Bearer <OAuth or personal access token>` on `/api/user` | Manage their own keys and model; import orgs they own and manage their keys and model; import repositories they administer and manage their keys and model |
 
 Admin users are matched by numeric user ID, never by login, because a login can be renamed and
 then claimed by someone else. Find an ID at `https://api.github.com/users/<login>` or on the
@@ -185,8 +197,13 @@ level Owner (50) on the top-level group. A GitHub token needs `read:org`; a GitL
 needs `read_api`. The token is used for the request and never stored. On GitHub an org can
 be imported only once the App is installed on it.
 
-For an OpenRouter call the worker tries every active key in order: the commenting user's
-keys, then the org's keys, each by `priority` (highest first). When a key fails with 401,
+A repository admin is GitHub repository permission `admin`, or GitLab access level Maintainer
+(40) or above on the project. The repository must be in an imported org. Like org ownership,
+it is asked of the platform on every change.
+
+For an OpenRouter call the worker tries every active key in order: the repository's keys,
+then the org's keys, then the commenting user's keys, each by `priority` (highest first), and
+only the groups the commenter may use (see above). When a key fails with 401,
 402, 403, 429, 5xx, a timeout or a network error, the next key is tried; 400 and 404 stop at
 once because every key would fail the same way.
 
@@ -199,6 +216,8 @@ once because every key would fail the same way.
 | DELETE | `/accounts/:platform/:userId` | (also removes orgs the user imported, and their keys) |
 | GET | `/orgs` | |
 | DELETE | `/orgs/:id` | |
+| GET | `/repos` | |
+| DELETE | `/repos/:id` | (also removes the repository's keys and model) |
 | GET | `/keys` | |
 | POST | `/keys` | `{ target: "user", platform, userId, apiKey, priority? }` or `{ target: "org", appInstallationId, apiKey, priority? }` |
 | DELETE | `/keys/:id` | |
@@ -216,6 +235,19 @@ once because every key would fail the same way.
 | DELETE | `/orgs/:id` | Owner only |
 | GET, POST | `/orgs/:id/keys` | Owner only; POST `{ apiKey, priority? }` |
 | DELETE | `/orgs/:id/keys/:keyId` | Owner only |
+| GET, PUT | `/orgs/:id/models` | Owner only; PUT `{ modality, model }` |
+| GET | `/models?modality=text` | OpenRouter's live model list (cached 5 minutes). Other modalities answer 400 for now |
+| GET, PUT | `/models/settings` | Own model per modality; PUT `{ modality, model }`, `model: null` clears it |
+| GET | `/repos` | Imported repositories the user administers now |
+| GET | `/repos/importable` | Repositories the user administers, with `importable` and `reason` |
+| POST | `/repos/import` | `{ externalId }` (the platform's repository or project id); admin only, org must be imported |
+| DELETE | `/repos/:id` | Admin only |
+| GET, POST | `/repos/:id/keys` | Admin only; POST `{ apiKey, priority? }` |
+| DELETE | `/repos/:id/keys/:keyId` | Admin only |
+| GET, PUT | `/repos/:id/models` | Admin only; PUT `{ modality, model }` |
+
+Modalities are `text`, `image`, `video`, `speech`, `decisions`, `embeddings`, `rerank`,
+`transcription` and `audio`. Every one can be stored; the agent uses `text` today.
 
 Keys are returned with their last four characters only. Errors are JSON `{ "error": "..." }`
 with 400, 401, 403, 404 or 409.
@@ -241,9 +273,10 @@ Dockerfile       production image; docker-entrypoint.sh prepares the database on
 src/server.js    entry point (server + inline worker)
 src/worker.js    queue worker (`npm run worker` to run alone)
 src/routes/      webhook, auth, admin and user routes
-src/controllers/ webhook, auth, admin and user controllers
+src/controllers/ webhook, auth, admin, user and repository controllers
 src/middleware/  admin token, platform-token sign-in, CORS
 src/services/    signature, identity, whitelist, task, comment parser, GitHub, GitLab,
-                 platform roles, OAuth, OpenRouter, key, key store and crypto services
+                 platform roles, OAuth, OpenRouter, model, key, key store, repository
+                 and crypto services
 test/            node:test suites (`npm test`)
 ```
