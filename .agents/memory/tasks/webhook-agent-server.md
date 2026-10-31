@@ -75,3 +75,12 @@ status: in-progress
   diff fetched with the diff media type, chosen model and decrypted key sent, reply posted;
   a marked comment and a `pull_request` event were skipped.
 - Not done: tasks left in `processing` by a crash are not re-queued automatically.
+
+### Task 5 — ci/workflow
+
+- `test/` holds `node:test` suites for the comment parser, signature checks, identity
+  extraction, key encryption, event normalisation, the GitHub App JWT, and an HTTP test of
+  the webhook endpoints against the real database (200 + queued, 401, three 403 cases, ping).
+- `.github/workflows/ci.yml` runs `db:push`, `db:seed` and `npm test` on SQLite and on a
+  PostgreSQL 16 service, for pushes to `master` and every pull request.
+- Ran locally on both: 26 tests pass on SQLite and on PostgreSQL 16 (`PROD=prod`).
