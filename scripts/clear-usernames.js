@@ -15,4 +15,7 @@ async function main() {
   }
 }
 
-main();
+// main() handles its own errors; this only reports one it could not.
+main().catch((err) => {
+  console.error('[clear-usernames]', err);
+});
