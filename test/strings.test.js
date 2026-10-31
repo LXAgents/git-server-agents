@@ -16,3 +16,11 @@ test('stays fast on a long run of slashes', () => {
   assert.equal(trimTrailingSlashes(input), input);
   assert.ok(Date.now() - started < 200);
 });
+
+test('logSafe keeps a value on one line and caps it', () => {
+  const { logSafe } = require('../src/utils/strings');
+  assert.equal(logSafe('push\n[webhook:github] queued fake\r\x1b[31m'), 'push [webhook:github] queued fake  [31m');
+  assert.equal(logSafe('a b\tc'), 'a b c');
+  assert.equal(logSafe('x'.repeat(500)), `${'x'.repeat(200)}…`);
+  assert.equal(logSafe(undefined), 'undefined');
+});

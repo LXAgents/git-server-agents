@@ -8,6 +8,7 @@ const gitlab = require('./gitlabService');
 const keys = require('./keyService');
 const openRouter = require('./openRouterService');
 const { TOOLS, createRepoTools } = require('./repoTools');
+const { logSafe } = require('../utils/strings');
 
 const MAX_HISTORY_CHARS = 30_000;
 const MAX_TOOL_ROUNDS = 5;
@@ -140,7 +141,7 @@ async function converse({ request, apiKey, system, history, question, repo }) {
       }
     } catch (err) {
       if (!toolsUnsupported(err)) throw err;
-      console.warn(`[agent] ${request.model} does not support tools; adding repository context to the prompt instead`);
+      console.warn(`[agent] ${logSafe(request.model)} does not support tools; adding repository context to the prompt instead`);
       const context = await repo.inlineContext(question);
       const plain = [
         { role: 'system', content: `${system}\n\n${context}` },
@@ -171,7 +172,7 @@ async function isOrgMember(platform, identity, payload, token) {
     // A personal namespace: only its owner counts.
     return String(identity.targetOrg).toLowerCase() === String(identity.triggerUser || '').toLowerCase();
   } catch (err) {
-    console.warn(`[agent] could not confirm ${identity.triggerUser} in ${identity.targetOrg}: ${err.message}`);
+    console.warn(`[agent] could not confirm ${logSafe(identity.triggerUser)} in ${logSafe(identity.targetOrg)}: ${logSafe(err.message)}`);
     return false;
   }
 }

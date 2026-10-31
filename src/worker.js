@@ -1,6 +1,7 @@
 const config = require('./config');
 const prisma = require('./db');
 const { processTask } = require('./services/agentService');
+const { logSafe } = require('./utils/strings');
 
 function describe(err) {
   const response = err.response;
@@ -30,13 +31,13 @@ async function runOnce(limit = 10) {
     try {
       const status = await processTask(task);
       await prisma.agentTask.update({ where: { id: task.id }, data: { status } });
-      console.log(`[worker] ${task.id} ${task.platform}/${task.event} -> ${status}`);
+      console.log(`[worker] ${task.id} ${task.platform}/${logSafe(task.event)} -> ${status}`);
     } catch (err) {
       await prisma.agentTask.update({
         where: { id: task.id },
         data: { status: 'failed', errorLog: describe(err).slice(0, 10000) },
       });
-      console.error(`[worker] ${task.id} ${task.platform}/${task.event} -> failed: ${err.message}`);
+      console.error(`[worker] ${task.id} ${task.platform}/${logSafe(task.event)} -> failed: ${logSafe(err.message)}`);
     }
   }
   return pending.length;
