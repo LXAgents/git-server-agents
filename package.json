@@ -6,7 +6,7 @@
   "scripts": {
     "setup-db": "node scripts/setup-db.js",
     "predev": "node scripts/setup-db.js && npx prisma generate",
-    "dev": "nodemon src/server.js",
+    "dev": "node --watch src/server.js",
     "prestart": "node scripts/setup-db.js && npx prisma generate",
     "start": "node src/server.js",
     "worker": "node src/worker.js",
@@ -25,7 +25,7 @@
   },
   "homepage": "https://github.com/LXAgents/git-server-agents#readme",
   "dependencies": {
-    "@prisma/adapter-better-sqlite3": "^7.10.1",
+    "@prisma/adapter-libsql": "^7.10.1",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "axios": "^1.21.0",
@@ -33,11 +33,14 @@
     "express": "^5.3.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14",
     "prisma": "^7.10.1"
   },
   "private": true,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.22.2 || ^24.15.0 || >=26"
+  },
+  "allowScripts": {
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true
   }
 }

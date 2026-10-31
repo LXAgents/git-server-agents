@@ -7,8 +7,8 @@ function createAdapter() {
     const { PrismaPg } = require('@prisma/adapter-pg');
     return new PrismaPg({ connectionString: databaseUrl });
   }
-  const { PrismaBetterSqlite3 } = require('@prisma/adapter-better-sqlite3');
-  return new PrismaBetterSqlite3({ url: databaseUrl });
+  const { PrismaLibSql } = require('@prisma/adapter-libsql');
+  return new PrismaLibSql({ url: databaseUrl });
 }
 
 const prisma = new PrismaClient({ adapter: createAdapter() });
