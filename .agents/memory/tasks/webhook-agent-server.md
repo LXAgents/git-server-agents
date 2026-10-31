@@ -1,7 +1,7 @@
 ---
 name: webhook-agent-server
 description: Task record for building the zero-trust GitHub/GitLab webhook server and background AI agent worker.
-status: in-progress
+status: done
 ---
 
 # Webhook agent server
@@ -20,12 +20,12 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record, memory index, `.gitignore` | git-server-agents | `plan/webhook-agent-server` | `.agents/`, `.gitignore` | |
-| 2 | Project setup | npm project, Prisma schemas, DB switch and seed | git-server-agents | `build/project-setup` | `package.json`, `prisma/`, `scripts/` | |
-| 3 | Webhook intake | Express app, routes, controllers, whitelist | git-server-agents | `feat/webhook` | `src/server.js`, `src/app.js`, `src/routes/`, `src/controllers/`, `src/services/whitelist.js` | |
-| 4 | Background worker | Polling worker, comment parser, platform and OpenRouter clients | git-server-agents | `feat/worker` | `src/worker.js`, `src/services/` | |
-| 5 | Tests and CI | Unit tests and GitHub Actions workflow | git-server-agents | `ci/workflow` | `test/`, `.github/workflows/` | |
-| 6 | Release | Changelog and record close-out | git-server-agents | `release/1.0.0` | `wiki/logs/1/0/0/`, `wiki/logs/logs-index.md` | |
+| 1 | Task record | This record, memory index, `.gitignore` | git-server-agents | `plan/webhook-agent-server` | `.agents/`, `.gitignore` | #1 |
+| 2 | Project setup | npm project, Prisma schemas, DB switch and seed | git-server-agents | `build/project-setup` | `package.json`, `prisma/`, `scripts/` | #2 |
+| 3 | Webhook intake | Express app, routes, controllers, whitelist | git-server-agents | `feat/webhook` | `src/server.js`, `src/app.js`, `src/routes/`, `src/controllers/`, `src/services/whitelist.js` | #3 |
+| 4 | Background worker | Polling worker, comment parser, platform and OpenRouter clients | git-server-agents | `feat/worker` | `src/worker.js`, `src/services/` | #4 |
+| 5 | Tests and CI | Unit tests and GitHub Actions workflow | git-server-agents | `ci/workflow` | `test/`, `.github/workflows/` | #5 |
+| 6 | Release | Changelog and record close-out | git-server-agents | `release/1.0.0` | `wiki/logs/1/0/0/`, `wiki/logs/logs-index.md` | #6 |
 
 ## Progress
 
@@ -84,3 +84,11 @@ status: in-progress
 - `.github/workflows/ci.yml` runs `db:push`, `db:seed` and `npm test` on SQLite and on a
   PostgreSQL 16 service, for pushes to `master` and every pull request.
 - Ran locally on both: 26 tests pass on SQLite and on PostgreSQL 16 (`PROD=prod`).
+
+### Task 6 — release/1.0.0
+
+- Version 1.0.0 (the owner was unavailable, so it was chosen as the first release of a new
+  project; `package.json` already carried it from `npm init`).
+- Added `wiki/logs/1/0/0/CHANGELOG.md`, `wiki/logs/logs-index.md`, and a README covering
+  the flow, model selection, setup, whitelisting and layout.
+- Filled the PR column. Record closed.
