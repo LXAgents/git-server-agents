@@ -7,12 +7,22 @@ const { toComment } = require('../services/eventService');
 const { parseComment } = require('../services/commentParser');
 const { logSafe } = require('../utils/strings');
 
-// Without a secret anyone could forge an event, so production refuses to run
-// unsigned. Development allows it so the endpoints can be exercised with curl.
-function checkAuthenticity(authentic, secret) {
-  if (secret) return authentic;
-  if (config.isProd) return false;
-  return true;
+// Without a secret anyone could forge an event, so production (PROD=prod) refuses to run
+// unsigned. Development allows it so the endpoints can be exercised with curl. Returns null
+// when the request may go on, or why it may not. The reason is logged and sent back: GitHub
+// shows it under the App's Recent deliveries, and it names a setting, not a secret.
+function refusal({ authentic, secret, sent, envName, header }) {
+  if (!secret) {
+    return config.isProd ? `${envName} is not set on the server, and PROD=prod refuses unsigned webhooks` : null;
+  }
+  if (authentic) return null;
+  if (!sent) return `no ${header} header: set the same secret in the App's webhook settings`;
+  return `${header} does not match ${envName}: set the same secret on the server and in the App's webhook settings`;
+}
+
+function refuse(res, platform, reason) {
+  console.warn(`[webhook:${platform}] 401 ${reason}`);
+  return res.status(401).json({ error: reason });
 }
 
 // A new comment whose line 1 is a trigger (@agents or @vendor/model). Nothing else is queued.
@@ -44,9 +54,14 @@ async function github(req, res, next) {
   try {
     const secret = config.github.webhookSecret;
     const signature = req.get('x-hub-signature-256');
-    if (!checkAuthenticity(verifyGithubSignature(req.rawBody, signature, secret), secret)) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
+    const reason = refusal({
+      authentic: verifyGithubSignature(req.rawBody, signature, secret),
+      secret,
+      sent: Boolean(signature),
+      envName: 'GITHUB_WEBHOOK_SECRET',
+      header: 'X-Hub-Signature-256',
+    });
+    if (reason) return refuse(res, 'github', reason);
     const event = req.get('x-github-event') || 'unknown';
     if (event === 'ping') return res.status(200).json({ status: 'pong' });
     return await accept(res, 'github', event, githubIdentity(req.body), req.body);
@@ -58,9 +73,15 @@ async function github(req, res, next) {
 async function gitlab(req, res, next) {
   try {
     const secret = config.gitlab.webhookSecret;
-    if (!checkAuthenticity(verifyGitlabToken(req.get('x-gitlab-token'), secret), secret)) {
-      return res.status(401).json({ error: 'Invalid token' });
-    }
+    const token = req.get('x-gitlab-token');
+    const reason = refusal({
+      authentic: verifyGitlabToken(token, secret),
+      secret,
+      sent: Boolean(token),
+      envName: 'GITLAB_WEBHOOK_SECRET',
+      header: 'X-Gitlab-Token',
+    });
+    if (reason) return refuse(res, 'gitlab', reason);
     const event = req.body.object_kind || req.get('x-gitlab-event') || 'unknown';
     return await accept(res, 'gitlab', event, gitlabIdentity(req.body), req.body);
   } catch (err) {
