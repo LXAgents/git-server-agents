@@ -6,6 +6,7 @@
 //   node scripts/manage.js remove-account <github|gitlab> <userId>
 //   node scripts/manage.js remove-org <github|gitlab> <orgName>
 //   node scripts/manage.js add-key <github|gitlab> <accountId> <apiKey> [priority] [provider]
+//   node scripts/manage.js add-org-key <orgName> <apiKey> [priority] [provider] [--platform gitlab]
 //   node scripts/manage.js disable-key <keyId>
 //   node scripts/manage.js list
 //   node scripts/manage.js new-encryption-key
@@ -24,6 +25,25 @@ function platformArg(value) {
 function required(value, name) {
   if (!value) throw new Error(`missing <${name}>`);
   return value;
+}
+
+function splitFlags(args) {
+  const positional = [];
+  const flags = {};
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i].startsWith('--')) flags[args[i].slice(2)] = args[(i += 1)];
+    else positional.push(args[i]);
+  }
+  return { positional, flags };
+}
+
+async function createKey(owner, apiKey, priority, providerName) {
+  required(apiKey, 'apiKey');
+  const provider = await prisma.provider.findFirst({ where: { displayName: providerName } });
+  if (!provider) throw new Error(`provider ${providerName} not found; run npm run db:seed`);
+  return prisma.accountKey.create({
+    data: { ...owner, providerId: provider.id, apiKeyEncrypted: encrypt(apiKey), priority: Number(priority) || 0 },
+  });
 }
 
 const commands = {
@@ -67,19 +87,21 @@ const commands = {
   async 'add-key'(platform, accountId, apiKey, priority = '0', providerName = 'OpenRouter') {
     const type = platformArg(platform);
     required(accountId, 'accountId');
-    required(apiKey, 'apiKey');
-    const provider = await prisma.provider.findFirst({ where: { displayName: providerName } });
-    if (!provider) throw new Error(`provider ${providerName} not found; run npm run db:seed`);
-    const key = await prisma.accountKey.create({
-      data: {
-        accountType: type,
-        accountId,
-        providerId: provider.id,
-        apiKeyEncrypted: encrypt(apiKey),
-        priority: Number(priority) || 0,
-      },
+    const key = await createKey({ accountType: type, accountId }, apiKey, priority, providerName);
+    console.log(`key ${key.id} added for ${type}:${accountId} (priority ${key.priority})`);
+  },
+
+  // orgName is unique per platform only, so the platform comes from --platform (default github).
+  async 'add-org-key'(...args) {
+    const { positional, flags } = splitFlags(args);
+    const [orgName, apiKey, priority = '0', providerName = 'OpenRouter'] = positional;
+    const platform = platformArg(flags.platform || 'github');
+    const installation = await prisma.appInstallation.findUnique({
+      where: { platform_orgName: { platform, orgName: required(orgName, 'orgName') } },
     });
-    console.log(`key ${key.id} added for ${type}:${accountId} (${provider.displayName}, priority ${key.priority})`);
+    if (!installation) throw new Error(`${platform} org ${orgName} is not whitelisted`);
+    const key = await createKey({ appInstallationId: installation.id }, apiKey, priority, providerName);
+    console.log(`key ${key.id} added for ${platform} org ${orgName} (priority ${key.priority})`);
   },
 
   async 'disable-key'(id) {
@@ -96,8 +118,12 @@ const commands = {
     const installations = await prisma.appInstallation.findMany({ orderBy: [{ platform: 'asc' }, { orgName: 'asc' }] });
     console.table(accounts.map(({ type, id, username }) => ({ type, id, username })));
     console.table(installations.map(({ platform, orgName, installationId, accountId }) => ({ platform, orgName, installationId, owner: accountId })));
-    const keys = await prisma.accountKey.findMany({ include: { provider: true }, orderBy: { priority: 'desc' } });
-    console.table(keys.map(({ id, accountType, accountId, provider, isActive, priority }) => ({ id, account: `${accountType}:${accountId}`, provider: provider.displayName, isActive, priority })));
+    const keys = await prisma.accountKey.findMany({
+      include: { provider: true, appInstallation: true },
+      orderBy: { priority: 'desc' },
+    });
+    const owner = (k) => (k.appInstallation ? `org ${k.appInstallation.platform}:${k.appInstallation.orgName}` : `user ${k.accountType}:${k.accountId}`);
+    console.table(keys.map((k) => ({ id: k.id, owner: owner(k), provider: k.provider.displayName, isActive: k.isActive, priority: k.priority })));
   },
 };
 

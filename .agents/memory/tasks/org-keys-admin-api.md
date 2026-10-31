@@ -38,3 +38,12 @@ status: in-progress
 ### Task 1 — plan/org-keys-admin-api
 
 - Created this record. The 1.0.0 record (`webhook-agent-server.md`) is closed and unchanged.
+
+### Task 2 — feat/org-key
+
+- Both `.prisma` schemas: `AccountKey.accountType` / `accountId` are optional, new optional
+  `appInstallationId` relation to `AppInstallation` (cascade delete, indexed), back-relation
+  `AppInstallation.keys`. Files were run through `prisma format`, which realigned columns.
+- `scripts/manage.js add-org-key <orgName> <apiKey> [priority] [provider] [--platform]`;
+  `list` shows whether a key belongs to a user or an org. Key creation shared by both commands.
+- `db:push` on SQLite applies cleanly over 1.0.0 data; 26 existing tests still pass.
