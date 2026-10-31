@@ -10,7 +10,10 @@ background worker sends the comment to an OpenRouter model, together with:
 
 The answer is posted back as a reply, with a footer naming the model, what the answer cost in
 US dollars (every OpenRouter call it took, added up; `0 USD` for free models), and the
-commenter who asked (`@login` in a code span, so nobody is notified). Repositories are never cloned: diffs, comments and files
+commenter who asked (their username, as `@name` in a code span, so nobody is notified).
+Every reply ends with the hidden marker `<!-- LXAgents -->` (error replies also carry
+`<!-- LXAgents:error -->`), so the agent never answers itself. Replies from before 1.11.1, with
+`<!-- git-server-agents -->`, are still recognised. Repositories are never cloned: diffs, comments and files
 all come from the REST APIs.
 
 ## How a webhook is handled
