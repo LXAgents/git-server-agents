@@ -1,7 +1,7 @@
 ---
 name: agent-error-replies
 description: Task record for error replies from the agent, refusing personal access tokens, and the scoped package name (1.10.0).
-status: in-progress
+status: done
 ---
 
 # Agent error replies
@@ -25,6 +25,6 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/agent-error-replies` | `.agents/` | |
-| 2 | Error replies | Error codes, replies, notices, stale tasks, PAT refusal, package name | git-server-agents | `feat/agent-error-replies` | `src/`, `test/`, `README.md`, `package.json` | |
-| 3 | Release | 1.10.0 changelog and version | git-server-agents | `release/1.10.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/agent-error-replies` | `.agents/` | #50 |
+| 2 | Error replies | Error codes, replies, notices, stale tasks, PAT refusal, package name | git-server-agents | `feat/agent-error-replies` | `src/`, `test/`, `README.md`, `package.json` | #51 |
+| 3 | Release | 1.10.0 changelog and version | git-server-agents | `release/1.10.0` | `wiki/logs/`, `package.json` | #52 |

@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.10.0](1/10/0/CHANGELOG.md) | Error replies with codes, PAT sign-in refused, scoped package name | `CHANGELOG.md` |
 | [1.9.0](1/9/0/CHANGELOG.md) | Operator sign-in removed; owners run the admin API | `CHANGELOG.md` |
 | [1.8.0](1/8/0/CHANGELOG.md) | One owner per platform | `CHANGELOG.md` |
 | [1.7.0](1/7/0/CHANGELOG.md) | Owner role, profiles from the platform, one platform per session | `CHANGELOG.md` |
