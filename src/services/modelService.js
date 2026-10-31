@@ -1,5 +1,6 @@
 // Which model a user, org or repo has picked, per modality, and the live OpenRouter catalogue.
 const axios = require('axios');
+require('../http');
 const prisma = require('../db');
 const config = require('../config');
 const { HttpError } = require('../errors');

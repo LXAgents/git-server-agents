@@ -3,6 +3,7 @@
 // whitelist and the live owner checks stay where they are.
 const crypto = require('crypto');
 const axios = require('axios');
+require('../http');
 const config = require('../config');
 const { HttpError } = require('../errors');
 const { encrypt, decrypt } = require('./cryptoService');
