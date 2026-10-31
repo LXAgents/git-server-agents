@@ -10,7 +10,7 @@ const openRouter = require('../src/services/openRouterService');
 const models = require('../src/services/modelService');
 const repoStore = require('../src/services/repoStore');
 const { processTask } = require('../src/services/agentService');
-const { REPLY_MARKER } = require('../src/services/eventService');
+const { REPLY_MARKER, ERROR_MARKER } = require('../src/services/eventService');
 
 const installation = { id: 'inst-row', installationId: '555' };
 
@@ -55,11 +55,98 @@ function stubAll(t, { member = true, history = [], repository = null, collaborat
 
 test('a comment without @agents or @vendor/model on line 1 is skipped before any API call', async (t) => {
   const calls = stubAll(t);
-  for (const body of ['What files do I have?', '@alice what do you think?', '@openrouter/free', '@agents']) {
+  for (const body of ['What files do I have?', '@alice what do you think?', 'hi @openrouter/free']) {
     assert.equal(await processTask(githubTask(body)), 'skipped');
   }
   assert.equal(whitelist.verify.mock.callCount(), 0);
   assert.equal(calls.complete.length, 0);
+  assert.equal(calls.posted.length, 0);
+});
+
+test('a trigger with no question gets a NO_QUESTION reply instead of silence', async (t) => {
+  const calls = stubAll(t);
+  for (const body of ['@openrouter/free', '@agents']) {
+    await assert.rejects(processTask(githubTask(body)), /asks nothing/);
+  }
+  assert.equal(calls.complete.length, 0);
+  assert.equal(calls.posted.length, 2);
+  assert.match(calls.posted[0].body, /`NO_QUESTION`/);
+  assert.match(calls.posted[0].body, new RegExp(`${REPLY_MARKER}\n${ERROR_MARKER}$`));
+});
+
+test('a commenter who is not whitelisted, in an imported org, is told so', async (t) => {
+  const calls = stubAll(t);
+  t.mock.method(whitelist, 'verify', async () => ({ allowed: false, reason: 'user alice is not whitelisted', installation }));
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /not whitelisted/);
+  assert.equal(github.installationToken.mock.calls[0].arguments[0], '555');
+  assert.match(calls.posted[0].body, /`NOT_WHITELISTED`/);
+  assert.match(calls.posted[0].body, /GitHub user ID 1001/);
+  assert.equal(calls.complete.length, 0);
+});
+
+test('in an org nobody imported the agent stays silent', async (t) => {
+  const calls = stubAll(t);
+  t.mock.method(whitelist, 'verify', async () => ({ allowed: false, reason: 'org acme is not whitelisted' }));
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /not whitelisted/);
+  assert.equal(calls.posted.length, 0);
+  assert.equal(github.installationToken.mock.callCount(), 0);
+});
+
+test('an OpenRouter failure is answered with its code, status, retry advice and the keys tried', async (t) => {
+  const calls = stubAll(t);
+  t.mock.method(keys, 'getProviderKeys', async () => ({
+    provider: {},
+    keys: [
+      { id: 'k1', owner: 'repo', apiKey: 'sk-repo' },
+      { id: 'k2', owner: 'user', apiKey: 'sk-user' },
+    ],
+  }));
+  t.mock.method(openRouter, 'complete', async () => {
+    const err = new Error('Request failed with status code 402');
+    err.source = 'openrouter';
+    err.response = { status: 402, data: { error: { code: 402, message: 'Insufficient credits' } }, headers: {} };
+    throw err;
+  });
+  t.mock.method(console, 'warn', () => {});
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')), /402/);
+  const { body } = calls.posted[0];
+  assert.match(body, /`INSUFFICIENT_CREDITS` · HTTP 402/);
+  assert.match(body, /`Insufficient credits`/);
+  assert.match(body, /Retrying will not help/);
+  assert.match(body, /repo key \(402\), user key \(402\)/);
+  assert.match(body, /Model: `openrouter\/free` · Task: `t1`/);
+  assert.doesNotMatch(body, /sk-repo|sk-user/);
+});
+
+test('no usable key is answered with NO_API_KEY', async (t) => {
+  const calls = stubAll(t, { member: false });
+  t.mock.method(keys, 'getProviderKeys', async () => ({ provider: {}, keys: [] }));
+  await assert.rejects(processTask(githubTask('@openrouter/free\nhi')));
+  assert.match(calls.posted[0].body, /`NO_API_KEY`/);
+});
+
+test('a failed error reply is logged and the task still fails with the original error', async (t) => {
+  stubAll(t);
+  t.mock.method(github, 'postComment', async () => {
+    throw new Error('403 Resource not accessible');
+  });
+  const logged = [];
+  t.mock.method(console, 'error', (line) => logged.push(line));
+  await assert.rejects(processTask(githubTask('@agents')), /asks nothing/);
+  assert.match(logged[0], /could not post the error reply/);
+});
+
+test('error replies stay out of the conversation history', async (t) => {
+  const history = [
+    { id: 898, author: 'alice', body: '@openrouter/free\nFirst' },
+    { id: 899, author: 'agent', body: `⚠️ **Rate limit reached**\n${REPLY_MARKER}\n${ERROR_MARKER}` },
+  ];
+  const calls = stubAll(t, { history });
+  await processTask(githubTask('@openrouter/free\nAgain'));
+  assert.deepEqual(
+    calls.complete[0].messages.slice(1).map((m) => m.role),
+    ['user', 'user']
+  );
 });
 
 test('an org member gets the org keys as fallback, with history and the issue default branch', async (t) => {

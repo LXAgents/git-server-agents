@@ -1,7 +1,7 @@
 const config = require('../config');
 const { githubIdentity, gitlabIdentity } = require('./identityService');
 const whitelist = require('./whitelistService');
-const { toComment, REPLY_MARKER } = require('./eventService');
+const { toComment, REPLY_MARKER, ERROR_MARKER } = require('./eventService');
 const { parseComment, stripTrigger } = require('./commentParser');
 const models = require('./modelService');
 const repoStore = require('./repoStore');
@@ -9,6 +9,7 @@ const github = require('./githubService');
 const gitlab = require('./gitlabService');
 const keys = require('./keyService');
 const openRouter = require('./openRouterService');
+const { AgentError, formatReply } = require('./agentErrors');
 const { TOOLS, createRepoTools } = require('./repoTools');
 const { logSafe } = require('../utils/strings');
 
@@ -60,6 +61,7 @@ function buildHistory(comments, currentCommentId, maxChars = MAX_HISTORY_CHARS) 
   for (const c of comments) {
     if (currentCommentId !== undefined && String(c.id) === String(currentCommentId)) continue;
     const body = String(c.body || '');
+    if (body.includes(ERROR_MARKER)) continue;
     if (body.includes(REPLY_MARKER)) {
       const content = stripReply(body);
       if (content) messages.push({ role: 'assistant', content });
@@ -81,15 +83,19 @@ function isKeySpecific(err) {
   return status !== 400 && status !== 404;
 }
 
-// Runs `attempt(key)` with each key in order until one succeeds.
+// Runs `attempt(key)` with each key in order until one succeeds. The error thrown at the end
+// lists every attempt (owner and status, never the key) as `attempts`.
 async function chatWithFallback(candidates, attempt) {
   let lastError;
+  const attempts = [];
   for (const [index, key] of candidates.entries()) {
     try {
       return await attempt(key);
     } catch (err) {
       lastError = err;
       const status = (err.response && err.response.status) || err.code || 'error';
+      attempts.push({ owner: key.owner, status });
+      err.attempts = attempts;
       if (!isKeySpecific(err)) throw err;
       if (index < candidates.length - 1) {
         console.warn(`[agent] ${key.owner} key ${key.id} failed (${status}), falling back to next...`);
@@ -124,7 +130,7 @@ async function converse({ request, apiKey, system, history, question, repo }) {
         const reply = await call(messages, TOOLS);
         const toolCalls = reply.tool_calls || [];
         if (toolCalls.length === 0 || round === MAX_TOOL_ROUNDS) {
-          if (!reply.content) throw new Error(`model ${request.model} gave no answer after ${round} tool rounds`);
+          if (!reply.content) throw openRouter.emptyError(request.model);
           return reply.content;
         }
         messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
@@ -143,13 +149,13 @@ async function converse({ request, apiKey, system, history, question, repo }) {
         { role: 'user', content: question },
       ];
       const reply = await call(plain);
-      if (!reply.content) throw new Error(`empty response from model ${request.model}`);
+      if (!reply.content) throw openRouter.emptyError(request.model);
       return reply.content;
     }
   }
 
   const reply = await call(messages);
-  if (!reply.content) throw new Error(`empty response from model ${request.model}`);
+  if (!reply.content) throw openRouter.emptyError(request.model);
   return reply.content;
 }
 
@@ -194,32 +200,44 @@ async function resolveRef(platform, comment, token) {
   return comment.defaultBranch;
 }
 
-// Processes one AgentTask. Resolves to "success" or "skipped"; throws to fail the task.
-async function processTask(task) {
-  const payload = JSON.parse(task.payload);
-  const comment = toComment(task.platform, task.event, payload);
-  if (!comment) return 'skipped';
+const PLATFORM_NAMES = { github: 'GitHub', gitlab: 'GitLab' };
 
-  // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
-  const parsed = parseComment(comment.commentBody);
-  const { prompt } = parsed;
-  if (!(parsed.auto || parsed.model) || !prompt) {
-    console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model, followed by a question`);
-    return 'skipped';
+async function postReply(platform, comment, body, token) {
+  if (platform === 'github') return github.postComment(comment.repo, comment.number, body, token);
+  return gitlab.postNote(comment.projectId, comment.kind, comment.number, body);
+}
+
+// Tells the commenter why there is no answer: a code, the status and whether to retry. A
+// failure to post is only logged, so the task still records the original error.
+async function replyWithError(task, comment, ctx, err) {
+  try {
+    let token = ctx.token;
+    if (task.platform === 'github' && !token) {
+      if (!ctx.installationId) return;
+      token = await github.installationToken(ctx.installationId);
+    }
+    const body = `${formatReply(err, { model: ctx.model, taskId: task.id })}\n${REPLY_MARKER}\n${ERROR_MARKER}`;
+    await postReply(task.platform, comment, body, token);
+  } catch (postErr) {
+    console.error(`[agent] task ${task.id}: could not post the error reply: ${logSafe(postErr.message)}`);
   }
+}
 
-  // Check the whitelist again: access may have been revoked while the task was queued.
-  const identity = task.platform === 'github' ? githubIdentity(payload) : gitlabIdentity(payload);
-  const access = await whitelist.verify(task.platform, identity);
-  if (!access.allowed) throw new Error(`no longer whitelisted: ${access.reason}`);
+// Everything after the trigger check. `ctx` collects the token and model as they become known,
+// for the error reply.
+async function answerComment(task, payload, comment, parsed, identity, access, ctx) {
+  if (!access.allowed) {
+    throw new AgentError('NOT_WHITELISTED', `${PLATFORM_NAMES[task.platform]} user ID ${identity.triggerUserId} is not whitelisted on this server.`);
+  }
+  if (!parsed.prompt) throw new AgentError('NO_QUESTION', 'The comment starts with a trigger but asks nothing.');
 
   let diff = '';
   let token;
   let history;
   if (task.platform === 'github') {
-    const installationId = identity.installationId || access.installation.installationId;
-    if (!installationId) throw new Error('payload has no GitHub App installation id');
-    token = await github.installationToken(installationId);
+    if (!ctx.installationId) throw new Error('payload has no GitHub App installation id');
+    token = await github.installationToken(ctx.installationId);
+    ctx.token = token;
     if (comment.pullUrl) diff = await github.getPullDiff(comment.pullUrl, token);
     history = await github.listIssueComments(comment.repo, comment.number, token);
   } else {
@@ -230,6 +248,7 @@ async function processTask(task) {
   const account = { type: task.platform, id: identity.triggerUserId };
   const repository = await repoStore.findForEvent(task.platform, payload, access.installation);
   const model = parsed.model || (await models.resolveModel({ repository, installation: access.installation, account })).model;
+  ctx.model = model;
 
   const member = await isOrgMember(task.platform, identity, payload, token);
   const repoMember = repository ? await isRepoMember(task.platform, identity, comment, member, token) : false;
@@ -240,8 +259,8 @@ async function processTask(task) {
     repoMember ? repository : null
   );
   if (candidates.length === 0) {
-    const orgNote = member ? `, repo or org ${identity.targetOrg}` : ` (repo and org keys need membership of ${identity.targetOrg})`;
-    throw new Error(`no active ${config.ai.providerName} key for user ${identity.triggerUserId}${orgNote}`);
+    const orgNote = member ? `, the repository or ${identity.targetOrg}` : ` (repository and org keys need membership of ${identity.targetOrg})`;
+    throw new AgentError('NO_API_KEY', `No active ${config.ai.providerName} key for you${orgNote}.`);
   }
 
   const ref = await resolveRef(task.platform, comment, token);
@@ -255,18 +274,46 @@ async function processTask(task) {
       apiKey: key.apiKey,
       system: buildSystemPrompt(comment, diff, { tools: Boolean(repo) }),
       history: buildHistory(history, comment.commentId),
-      question: `@${comment.author || identity.triggerUser || 'user'}: ${prompt}`,
+      question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
       repo,
     })
   );
 
-  const reply = `${answer}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`;
-  if (task.platform === 'github') {
-    await github.postComment(comment.repo, comment.number, reply, token);
-  } else {
-    await gitlab.postNote(comment.projectId, comment.kind, comment.number, reply);
-  }
+  await postReply(task.platform, comment, `${answer}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`, token);
   return 'success';
+}
+
+// Processes one AgentTask. Resolves to "success" or "skipped"; throws to fail the task. Once a
+// comment is a trigger in an imported org, every failure is answered with an error reply.
+async function processTask(task) {
+  const payload = JSON.parse(task.payload);
+  const comment = toComment(task.platform, task.event, payload);
+  if (!comment) return 'skipped';
+
+  // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
+  const parsed = parseComment(comment.commentBody);
+  if (!(parsed.auto || parsed.model)) {
+    console.info(`[agent] task ${task.id} skipped: line 1 must start with @agents or @vendor/model`);
+    return 'skipped';
+  }
+
+  // Check the whitelist again: access may have been revoked while the task was queued. In an
+  // org nobody imported the app must not act at all, not even to say why.
+  const identity = task.platform === 'github' ? githubIdentity(payload) : gitlabIdentity(payload);
+  const access = await whitelist.verify(task.platform, identity);
+  if (!access.allowed && !access.installation) throw new Error(`not whitelisted: ${access.reason}`);
+
+  const ctx = {
+    model: parsed.model,
+    token: null,
+    installationId: task.platform === 'github' ? identity.installationId || access.installation.installationId : null,
+  };
+  try {
+    return await answerComment(task, payload, comment, parsed, identity, access, ctx);
+  } catch (err) {
+    await replyWithError(task, comment, ctx, err);
+    throw err;
+  }
 }
 
 module.exports = { processTask, buildSystemPrompt, buildHistory, chatWithFallback, converse, isOrgMember, isRepoMember };
