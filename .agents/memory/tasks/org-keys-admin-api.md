@@ -1,7 +1,7 @@
 ---
 name: org-keys-admin-api
 description: Task record for org-level API keys, runtime key fallback and the admin REST API (1.1.0).
-status: in-progress
+status: done
 ---
 
 # Org keys, key fallback and admin API
@@ -25,13 +25,13 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/org-keys-admin-api` | `.agents/` | |
-| 2 | Org keys | Schema relation and `add-org-key` | git-server-agents | `feat/org-key` | `prisma/`, `scripts/manage.js` | |
-| 3 | Key fallback | `getProviderKeys` and the retry loop | git-server-agents | `feat/key-fallback` | `src/services/keyService.js`, `src/services/agentService.js` | |
-| 4 | Platform auth | User identity and owner checks via the platform API | git-server-agents | `feat/platform-auth` | `src/services/platformService.js`, `src/middleware/userAuth.js` | |
-| 5 | Admin API | Operator routes behind `ADMIN_TOKEN` (no org creation) | git-server-agents | `feat/admin-api` | `src/routes/admin.js`, `src/controllers/adminController.js`, `src/middleware/adminAuth.js`, `src/app.js` | |
-| 6 | User API | Own keys, org import, org keys with live owner checks | git-server-agents | `feat/user-api` | `src/routes/user.js`, `src/controllers/userController.js` | |
-| 7 | Release | Changelog, README, close-out | git-server-agents | `release/1.1.0` | `wiki/logs/1/1/0/`, `README.md` | |
+| 1 | Task record | This record | git-server-agents | `plan/org-keys-admin-api` | `.agents/` | #7 |
+| 2 | Org keys | Schema relation and `add-org-key` | git-server-agents | `feat/org-key` | `prisma/`, `scripts/manage.js` | #8 |
+| 3 | Key fallback | `getProviderKeys` and the retry loop | git-server-agents | `feat/key-fallback` | `src/services/keyService.js`, `src/services/agentService.js` | #9 |
+| 4 | Platform auth | User identity and owner checks via the platform API | git-server-agents | `feat/platform-auth` | `src/services/platformService.js`, `src/middleware/userAuth.js` | #10 |
+| 5 | Admin API | Operator routes behind `ADMIN_TOKEN` (no org creation) | git-server-agents | `feat/admin-api` | `src/routes/admin.js`, `src/controllers/adminController.js`, `src/middleware/adminAuth.js`, `src/app.js` | #11 |
+| 6 | User API | Own keys, org import, org keys with live owner checks | git-server-agents | `feat/user-api` | `src/routes/user.js`, `src/controllers/userController.js` | #12 |
+| 7 | Release | Changelog, README, close-out | git-server-agents | `release/1.1.0` | `wiki/logs/1/1/0/`, `README.md` | #13 |
 
 ## Progress
 
@@ -94,3 +94,12 @@ status: in-progress
 - Every org route re-asks the platform whether the caller owns the org; an org on another
   platform answers 404.
 - 51 tests pass on SQLite and on PostgreSQL 16.
+
+### Task 7 — release/1.1.0
+
+- Version 1.1.0 (minor: new features, nullable schema change). `package.json` and the lock
+  file bumped; `wiki/logs/1/1/0/CHANGELOG.md` and the log index added; README documents both
+  APIs, the key order and the CLI. PR column filled. Record closed.
+- CI cost: restacking after every merge force-pushed every open branch and ran CI on each
+  (56 runs). The workflow now runs only for `master` pushes and PRs into `master`, skips
+  doc-only changes, cancels superseded runs and has 10-minute job timeouts.
