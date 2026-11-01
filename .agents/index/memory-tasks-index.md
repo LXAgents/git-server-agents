@@ -1,0 +1,36 @@
+---
+name: memory-tasks-index
+description: Index of .agents/memory/tasks — one row per task record.
+---
+
+# Memory Tasks Index
+
+**Scope:** `.agents/memory/tasks/`
+**Parent:** [memory-index](memory-index.md)
+
+## Tasks
+
+| File | Purpose |
+|---|---|
+| [`tasks/agent-context.md`](../memory/tasks/agent-context.md) | Task record for agent chat history, repository file reading and stricter trigger and key rules (1.4.0). |
+| [`tasks/agent-error-replies.md`](../memory/tasks/agent-error-replies.md) | Task record for error replies from the agent, refusing personal access tokens, and the scoped package name (1.10.0). |
+| [`tasks/agent-pickup-and-speed.md`](../memory/tasks/agent-pickup-and-speed.md) | Task record for the eyes reaction on pickup, step logs, parallel tasks and time limits (1.11.0). |
+| [`tasks/code-structure.md`](../memory/tasks/code-structure.md) | Task record for the behaviour-neutral refactor of git-server-agents (agent split, platform adapter, access and view services, grouped service folders) in 1.13.1. |
+| [`tasks/docker.md`](../memory/tasks/docker.md) | Task record for the git-server-agents Docker image (1.2.0). |
+| [`tasks/install-warnings.md`](../memory/tasks/install-warnings.md) | Task record for clearing the npm install warnings in git-server-agents (1.1.2). |
+| [`tasks/latest-dependencies.md`](../memory/tasks/latest-dependencies.md) | Task record for moving git-server-agents to the latest dependencies (1.1.1). |
+| [`tasks/lxagents-trigger.md`](../memory/tasks/lxagents-trigger.md) | Task record for renaming the comment trigger from the agents word to lxagents (server 1.14.0). |
+| [`tasks/models-and-tokens.md`](../memory/tasks/models-and-tokens.md) | Task record for per-user, org and repo models and OpenRouter keys, and the @agents trigger (1.6.0). |
+| [`tasks/multi-provider-byok.md`](../memory/tasks/multi-provider-byok.md) | Task record for native multi-provider BYOK support (OpenRouter, OpenAI, Anthropic, DeepSeek, z.ai) with provider + model per user, org and repo (server 1.13.0). |
+| [`tasks/oauth-code-exchange.md`](../memory/tasks/oauth-code-exchange.md) | Task record for returning a sealed one-time code instead of the OAuth token in the URL (1.5.0). |
+| [`tasks/oauth-sign-in.md`](../memory/tasks/oauth-sign-in.md) | Task record for client ID and secret sign-in, admin user IDs and the renamed GitHub variables (1.3.0). |
+| [`tasks/org-keys-admin-api.md`](../memory/tasks/org-keys-admin-api.md) | Task record for org-level API keys, runtime key fallback and the admin REST API (1.1.0). |
+| [`tasks/profiles-roles-platform.md`](../memory/tasks/profiles-roles-platform.md) | Task record for platform profiles, the owner role and one platform per session (1.7.0). |
+| [`tasks/remove-operator.md`](../memory/tasks/remove-operator.md) | Task record for removing the ADMIN_TOKEN operator sign-in; platform owners cover it. |
+| [`tasks/reply-footer-user.md`](../memory/tasks/reply-footer-user.md) | Task record for the User line in the agent's reply footer (1.11.1). |
+| [`tasks/single-owner.md`](../memory/tasks/single-owner.md) | Task record for allowing exactly one owner per platform (1.8.0). |
+| [`tasks/sonar-fixes.md`](../memory/tasks/sonar-fixes.md) | Task record for the SonarCloud findings on the server (1.4.1). |
+| [`tasks/sonar-log-injection.md`](../memory/tasks/sonar-log-injection.md) | Task record for the SonarCloud log-injection finding on the server (1.4.2). |
+| [`tasks/webhook-agent-server.md`](../memory/tasks/webhook-agent-server.md) | Task record for building the zero-trust GitHub/GitLab webhook server and background AI agent worker. |
+| [`tasks/webhook-refusal-logs.md`](../memory/tasks/webhook-refusal-logs.md) | Task record for logging refused webhooks and checking the setup at start (server 1.12.0). |
+| [`tasks/wiki-refactor.md`](../memory/tasks/wiki-refactor.md) | Task record for moving the server's human documentation from README.md into wiki/ pages and routing them from .agents/index (docs only, no release). |
