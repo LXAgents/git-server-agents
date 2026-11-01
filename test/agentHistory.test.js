@@ -46,6 +46,11 @@ test('the system prompt handles an issue with no diff, and the tools are only in
   assert.match(mr, /merge request/);
   assert.match(mr, /```diff/);
   assert.doesNotMatch(mr, /list_files/);
+  assert.doesNotMatch(mr, /Branches:/);
+  const withBranches = buildSystemPrompt({ platform: 'github', kind: 'pull_request', title: 'PR' }, '', { head: 'fix/login', base: 'main', sha: 'abc123' });
+  assert.match(withBranches, /Title: PR\nBranches: `fix\/login` into `main`\nHead commit: `abc123`/);
+  const issue = buildSystemPrompt({ platform: 'github', kind: 'issue', title: 'Bug' }, '', { head: 'x', base: 'y', sha: 'z' });
+  assert.doesNotMatch(issue, /Branches:|Head commit:/);
 });
 
 test('strips the model footer, and stays fast on bodies built to slow a regex down', () => {

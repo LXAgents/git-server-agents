@@ -48,6 +48,23 @@ test('recognises a GitLab merge request note', () => {
   );
 });
 
+test('carries the branches when the payload has them', () => {
+  const review = toComment('github', 'pull_request_review_comment', {
+    action: 'created',
+    repository,
+    pull_request: { number: 7, url: 'u', head: { sha: 'abc', ref: 'fix/login' }, base: { ref: 'main' } },
+    comment: { body: 'hi', user: { type: 'User' } },
+  });
+  assert.deepEqual({ headSha: review.headSha, headRef: review.headRef, baseRef: review.baseRef }, { headSha: 'abc', headRef: 'fix/login', baseRef: 'main' });
+  const mr = toComment('gitlab', 'note', {
+    project: { id: 12 },
+    user: { id: 7 },
+    object_attributes: { note: 'hi', noteable_type: 'MergeRequest', action: 'create' },
+    merge_request: { iid: 4, title: 'MR', source_branch: 'feat/x', target_branch: 'develop' },
+  });
+  assert.deepEqual({ headRef: mr.headRef, baseRef: mr.baseRef }, { headRef: 'feat/x', baseRef: 'develop' });
+});
+
 test('ignores replies that carry the new or the pre-1.11.1 marker', () => {
   for (const marker of ['<!-- LXAgents -->', '<!-- git-server-agents -->']) {
     const comment = toComment('github', 'issue_comment', {

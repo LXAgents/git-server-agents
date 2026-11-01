@@ -356,7 +356,7 @@ test('"@lxagents close this PR" closes the pull request the comment is on', asyn
   payload.issue.pull_request = { url: 'https://api.github.test/repos/acme/web/pulls/3' };
   task.payload = JSON.stringify(payload);
   t.mock.method(github, 'getPullDiff', async () => 'diff --git a/x b/x');
-  t.mock.method(github, 'getPull', async () => ({ head: { sha: 'headsha' } }));
+  t.mock.method(github, 'getPull', async () => ({ head: { sha: 'headsha', ref: 'fix/close' }, base: { ref: 'main' } }));
   t.mock.method(github, 'setPullRequestState', async (_repo, number, state) => ({ number, state, url: 'https://github.com/acme/web/pull/3' }));
   const replies = [
     { content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'close_pull_request', arguments: '{}' } }] },
@@ -369,6 +369,7 @@ test('"@lxagents close this PR" closes the pull request the comment is on', asyn
   assert.equal(await processTask(task), 'success');
   assert.deepEqual(github.setPullRequestState.mock.calls[0].arguments.slice(0, 3), ['acme/web', 3, 'closed']);
   assert.match(calls.complete[0].messages[0].content, /This comment is on pull request #3/);
+  assert.match(calls.complete[0].messages[0].content, /Branches: `fix\/close` into `main`\nHead commit: `headsha`/);
   assert.match(calls.complete[1].messages.at(-1).content, /Pull request #3 is now closed/);
 });
 
