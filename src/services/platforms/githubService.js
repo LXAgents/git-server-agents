@@ -140,6 +140,36 @@ async function isCollaborator(repo, login, token) {
   return res.status === 204;
 }
 
+// The commenter's permission on `repo`: "admin", "write", "read" or "none". GitHub reports
+// the maintain role as "write" and triage as "read". 404 means no access at all.
+async function getCollaboratorPermission(repo, login, token) {
+  const res = await axios.get(`${repoUrl(repo)}/collaborators/${encodeURIComponent(login)}/permission`, {
+    headers: headers(token),
+    validateStatus: (status) => status === 200 || status === 404,
+  });
+  return res.status === 200 ? (res.data && res.data.permission) || 'none' : 'none';
+}
+
+async function createIssue(repo, { title, body, labels }, token) {
+  const { data } = await axios.post(`${repoUrl(repo)}/issues`, { title, body, ...(labels ? { labels } : {}) }, { headers: headers(token) });
+  return { number: data.number, url: data.html_url, state: data.state };
+}
+
+// Opens or closes an issue. GitHub's issues endpoint would also close a pull request with the
+// same number, so a number that is a pull request is refused instead.
+async function setIssueState(repo, number, state, { reason } = {}, token) {
+  const { data: issue } = await axios.get(`${repoUrl(repo)}/issues/${number}`, { headers: headers(token) });
+  if (issue.pull_request) {
+    throw Object.assign(new Error(`#${number} is a pull request, not an issue`), { notIssue: true });
+  }
+  const { data } = await axios.patch(
+    `${repoUrl(repo)}/issues/${number}`,
+    { state, ...(reason ? { state_reason: reason } : {}) },
+    { headers: headers(token) }
+  );
+  return { number: data.number, url: data.html_url, state: data.state };
+}
+
 module.exports = {
   isCollaborator,
   appJwt,
@@ -152,4 +182,7 @@ module.exports = {
   getRepoTree,
   getFileContent,
   isOrgMember,
+  getCollaboratorPermission,
+  createIssue,
+  setIssueState,
 };
