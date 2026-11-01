@@ -129,7 +129,8 @@ async function isProjectMember(projectId, userId) {
   return (await getMemberAccessLevel(projectId, userId)) > 0;
 }
 
-// GitLab says "opened" where GitHub says "open"; the agent always sees "open".
+// An issue or merge request. GitLab says "opened" where GitHub says "open"; the agent always
+// sees "open".
 const issueOf = (data) => ({ number: data.iid, url: data.web_url, state: data.state === 'opened' ? 'open' : data.state });
 
 async function createIssue(projectId, { title, body, labels }) {
@@ -147,10 +148,29 @@ async function setIssueState(projectId, iid, state) {
   return issueOf(data);
 }
 
+// A merge request from `head` (source branch) into `base` (target branch). GitLab marks a
+// draft by the "Draft:" title prefix.
+async function createMergeRequest(projectId, { title, body, head, base, draft }) {
+  const { data } = await client().post(`${project(projectId)}/merge_requests`, {
+    title: draft ? `Draft: ${title}` : title,
+    description: body,
+    source_branch: head,
+    target_branch: base,
+  });
+  return issueOf(data);
+}
+
+async function setMergeRequestState(projectId, iid, state) {
+  const { data } = await client().put(`${project(projectId)}/merge_requests/${iid}`, { state_event: state === 'closed' ? 'close' : 'reopen' });
+  return issueOf(data);
+}
+
 module.exports = {
   getMemberAccessLevel,
   createIssue,
   setIssueState,
+  createMergeRequest,
+  setMergeRequestState,
   awardEmoji,
   isProjectMember,
   getMergeRequestDiff,

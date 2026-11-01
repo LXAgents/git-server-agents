@@ -46,6 +46,10 @@ const adapters = {
     },
     createIssue: (c, fields, token) => github.createIssue(c.repo, fields, token),
     setIssueState: (c, number, state, token) => github.setIssueState(c.repo, number, state, { reason: state === 'closed' ? 'completed' : undefined }, token),
+    pullNoun: 'pull request',
+    pullPrefix: '#',
+    createPullRequest: (c, fields, token) => github.createPullRequest(c.repo, fields, token),
+    setPullRequestState: (c, number, state, token) => github.setPullRequestState(c.repo, number, state, token),
   },
   gitlab: {
     name: 'GitLab',
@@ -69,6 +73,10 @@ const adapters = {
     canWrite: async (identity, c) => (await gitlab.getMemberAccessLevel(c.projectId, identity.triggerUserId)) >= GITLAB_DEVELOPER,
     createIssue: (c, fields) => gitlab.createIssue(c.projectId, fields),
     setIssueState: (c, number, state) => gitlab.setIssueState(c.projectId, number, state),
+    pullNoun: 'merge request',
+    pullPrefix: '!',
+    createPullRequest: (c, fields) => gitlab.createMergeRequest(c.projectId, fields),
+    setPullRequestState: (c, number, state) => gitlab.setMergeRequestState(c.projectId, number, state),
   },
 };
 

@@ -39,11 +39,14 @@ and after the last one it must answer with what it has.
 
 ## What the agent can change
 
-A commenter with **write access** to the repository can also ask the agent to manage issues:
+A commenter with **write access** to the repository can also ask the agent to manage issues
+and pull requests (merge requests on GitLab):
 
 ```
 @lxagents close this issue
 @lxagents open an issue for the flaky login test, label it bug
+@lxagents close this PR
+@lxagents open a pull request from fix/login into main titled "Fix the login redirect"
 @lxagents reopen #12
 ```
 
@@ -52,6 +55,9 @@ A commenter with **write access** to the repository can also ask the agent to ma
 | `create_issue` | Opens an issue | `title` (required), `body`, `labels` |
 | `close_issue` | Closes an issue | `number`, or this thread when it is an issue |
 | `reopen_issue` | Reopens an issue | `number`, or this thread when it is an issue |
+| `create_pull_request` | Opens a PR (GitLab: MR) from an existing branch; it never creates branches or commits | `title`, `head` (required), `base` (default branch if left out), `body`, `draft` |
+| `close_pull_request` | Closes a PR or MR without merging | `number`, or this thread when it is a PR or MR |
+| `reopen_pull_request` | Reopens a closed, unmerged PR or MR | `number`, or this thread when it is a PR or MR |
 
 - **Who:** on GitHub, `write`, `maintain` or `admin` permission on the repository; on GitLab,
   Developer or above on the project. Anyone else gets only the read tools. If the check fails,
@@ -62,7 +68,8 @@ A commenter with **write access** to the repository can also ask the agent to ma
   `Opened by LXAgents for @login` (in a code span, so nobody is notified).
 - **When it fails:** the platform's status and message go back to the model, such as
   `Error: create_issue failed (HTTP 422: Validation Failed)`, so it can fix the call or tell
-  you why. On GitHub, `close_issue` refuses a number that is a pull request.
+  you why. On GitHub, `close_issue` refuses a number that is a pull request, and a merged pull
+  request can't be reopened.
 
 ## Providers and keys (bring your own key)
 
