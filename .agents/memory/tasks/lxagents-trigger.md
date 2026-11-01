@@ -23,3 +23,9 @@ status: in progress
 ### Task 1 — plan/lxagents-trigger
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/lxagents-trigger
+
+- `commentParser.js`: `TRIGGER = '@lxagents'`, matched without regard to case. `@agents` is no longer a trigger, and a new test pins that.
+- Comments, log text, `.env.example` and the README name `@lxagents`.
+- Tests: 165 pass on SQLite.
