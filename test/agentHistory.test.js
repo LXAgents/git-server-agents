@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildHistory, buildSystemPrompt, buildToolGuide } = require('../src/services/agentService');
+const { replyFooter } = require('../src/services/agent/prompt');
 const { REPLY_MARKER } = require('../src/services/eventService');
 
 const reply = (text, model = 'openrouter/free') => `${text}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`;
@@ -58,10 +59,13 @@ test('strips the model footer, and stays fast on bodies built to slow a regex do
   assert.ok(Date.now() - started < 200);
 });
 
-test('the Model, Cost and User footer is left out of the history', () => {
-  const body = `Answer.\n\n<sub>Model: \`m/x\`</sub>\n<sub>Cost: \`0.0001 USD\`</sub>\n<sub>User: \`@alice\`</sub>\n${REPLY_MARKER}`;
+test('the Model, Cost, Loop and User footer is left out of the history', () => {
+  const body = `Answer.\n\n<sub>Model: \`m/x\`</sub>\n<sub>Cost: \`0.0001 USD\`</sub>\n<sub>Loop: \`3\`</sub>\n<sub>User: \`@alice\`</sub>\n${REPLY_MARKER}`;
   const [message] = buildHistory([{ id: 1, author: 'bot', body }]);
   assert.deepEqual(message, { role: 'assistant', content: 'Answer.' });
+  const full = `Answer.\n\n${replyFooter({ model: 'm/x', providerName: 'OpenRouter', cost: '0 USD', loop: 5, asker: 'alice' })}\n${REPLY_MARKER}`;
+  assert.match(full, /<sub>Cost: `0 USD`<\/sub>\n<sub>Loop: `5`<\/sub>\n<sub>User: `@alice`<\/sub>/);
+  assert.deepEqual(buildHistory([{ id: 1, author: 'bot', body: full }])[0], { role: 'assistant', content: 'Answer.' });
 });
 
 test("replies with the pre-1.11.1 marker still count as the agent's own", () => {

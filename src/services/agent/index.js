@@ -145,6 +145,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     model,
     providerName: providerInfo.name,
     cost: formatCost(request.spend),
+    loop: rounds,
     asker: comment.author || identity.triggerUser || 'unknown',
   });
   await api.postReply(comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);

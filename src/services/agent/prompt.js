@@ -49,7 +49,7 @@ function buildToolGuide({ rounds }) {
 // The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
 // linear on any comment body.
 const FOOTER_START = '<sub>Model: `';
-const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Provider|Cost|User): `[^`]*`<\/sub>){0,3}\s*$/;
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Provider|Cost|Loop|User): `[^`]*`<\/sub>){0,4}\s*$/;
 function stripReply(body) {
   const text = removeMarkers(body).trim();
   const start = text.lastIndexOf(FOOTER_START);
@@ -81,11 +81,13 @@ function buildHistory(comments, currentCommentId, maxChars = MAX_HISTORY_CHARS) 
 
 // The lines under every answer. The login is in a code span, so GitHub and GitLab don't link
 // or notify the user.
-function replyFooter({ model, providerName, cost, asker }) {
+// `loop` is the tool rounds the answer was allowed (see loopLimit).
+function replyFooter({ model, providerName, cost, loop, asker }) {
   return [
     `<sub>Model: \`${model}\`</sub>`,
     `<sub>Provider: \`${providerName}\`</sub>`,
     `<sub>Cost: \`${cost}\`</sub>`,
+    `<sub>Loop: \`${loop}\`</sub>`,
     `<sub>User: \`@${String(asker).replaceAll('`', '')}\`</sub>`,
   ].join('\n');
 }

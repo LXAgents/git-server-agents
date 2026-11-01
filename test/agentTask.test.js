@@ -163,7 +163,7 @@ test('an org member gets the org keys as fallback, with history and the issue de
     ]
   );
   assert.equal(github.getRepoTree.mock.callCount(), 0);
-  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Provider: \`OpenRouter\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n<sub>User: \`@alice\`</sub>\\n${REPLY_MARKER}`));
+  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Provider: \`OpenRouter\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n<sub>Loop: \`3\`</sub>\\n<sub>User: \`@alice\`</sub>\\n${REPLY_MARKER}`));
 });
 
 test('a user who is not an org member never falls back to org keys', async (t) => {
