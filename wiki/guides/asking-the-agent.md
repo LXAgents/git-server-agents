@@ -106,9 +106,9 @@ its published GLM models if its `/models` answers 404.
   the prompt, so "which branch is this?" needs no tool. `read_pull_request` also reads it without
   a mention, for its current state, labels and latest comments.
 - **Other issues, pull requests and commits:** only the ones **your comment mentions**, in the
-  same repository. `#12` and `GH-12` on GitHub (an issue or a PR, which share numbers), `#12`
-  for an issue and `!12` for a merge request on GitLab, a link to one in this repository, or a
-  commit sha. An issue can read a PR and a PR can read an issue:
+  same repository. On GitHub, `!12` is an issue, and `#12` or `GH-12` is a PR (or an issue,
+  since they share numbers). On GitLab, `#12` is an issue and `!12` a merge request. A link to
+  one in this repository, or a commit sha, works on both. An issue can read a PR and a PR can read an issue:
 
   ```
   @lxagents is this the same bug as #12?

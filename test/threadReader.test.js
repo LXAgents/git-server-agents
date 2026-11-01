@@ -22,6 +22,19 @@ test('mentions: GitHub #N, GH-N and links into this repository only', () => {
   assert.ok(commitLink.shas.has('0123456789abcdef0123456789abcdef01234567'));
 });
 
+test('mentions: GitHub !N is an issue only', () => {
+  assert.deepEqual(set(findReferences('What !1 about? and #5', { platform: 'github', repoPath: 'acme/web' })), { issues: [5, 1], pulls: [5], shas: [] });
+  assert.deepEqual(set(findReferences('wow!1 a!!2', { platform: 'github', repoPath: 'acme/web' })), { issues: [], pulls: [], shas: [] });
+});
+
+test('the tool guide explains the mention syntax of each platform', () => {
+  const { buildToolGuide } = require('../src/services/agent/prompt');
+  const guide = (platform) => buildToolGuide({ rounds: 3, thread: { platform }, readTools: ['read_issue'] });
+  assert.match(guide('github'), /!12 is issue 12; #12 is pull request 12, or issue 12/);
+  assert.match(guide('gitlab'), /#12 is issue 12 and !12 is merge request 12/);
+  assert.match(guide('github'), /answer about that one, not this thread/);
+});
+
 test('mentions: GitLab #N is an issue and !N a merge request', () => {
   const text = 'compare #4 with !9, https://gitlab.com/grp/app/-/merge_requests/11 and https://gitlab.com/grp/app/-/issues/12';
   assert.deepEqual(set(findReferences(text, { platform: 'gitlab', repoPath: 'grp/app' })), { issues: [4, 12], pulls: [9, 11], shas: [] });

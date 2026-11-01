@@ -89,8 +89,8 @@ const MANAGE_TOOLS = [...ISSUE_TOOLS, ...PULL_REQUEST_TOOLS];
 const READ_THREAD_TOOLS = [
   fn(
     'read_issue',
-    'Read an issue the commenter mentioned (e.g. #12): title, state, description and its last comments. On GitHub a mentioned pull request number works too.',
-    { number: { type: 'integer', description: 'The mentioned issue number, e.g. 12 for #12.' } },
+    'Read an issue the commenter mentioned (e.g. !12 or #12 on GitHub, #12 on GitLab): title, state, description and its last comments. On GitHub a pull request number works too.',
+    { number: { type: 'integer', description: 'The mentioned issue number, e.g. 12 for !12 or #12.' } },
     ['number']
   ),
   fn(
