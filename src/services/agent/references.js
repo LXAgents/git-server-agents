@@ -16,11 +16,17 @@ const toNumber = (text) => {
   return Number.isInteger(n) && n > 0 && n <= MAX_NUMBER ? n : null;
 };
 
-function collect(text, pattern, into, group = 1) {
+// Adds every number the pattern's first group captures.
+function collect(text, pattern, into) {
   for (const match of text.matchAll(pattern)) {
-    const value = group === 'sha' ? match[1].toLowerCase() : toNumber(match[group]);
+    const value = toNumber(match[1]);
     if (value !== null) into.add(value);
   }
+}
+
+// Adds every commit sha the pattern's first group captures, in lower case.
+function collectShas(text, pattern, into) {
+  for (const match of text.matchAll(pattern)) into.add(match[1].toLowerCase());
 }
 
 // `repoPath` is "owner/repo" on GitHub and "group/project" on GitLab.
@@ -53,7 +59,7 @@ function findReferences(text, { platform, repoPath }) {
   for (const match of body.matchAll(/(?:^|[^\w/])([0-9a-f]{7,40})\b/gi)) {
     if (/\d/.test(match[1]) && /[a-f]/i.test(match[1])) shas.add(match[1].toLowerCase());
   }
-  if (path) collect(body, new RegExp(`https?://[^\\s/]+/${path}/(?:-/)?(?:(?:pull|merge_requests)/\\d+/(?:-/)?)?commits?/([0-9a-f]{7,40})\\b`, 'gi'), shas, 'sha');
+  if (path) collectShas(body, new RegExp(`https?://[^\\s/]+/${path}/(?:-/)?(?:(?:pull|merge_requests)/\\d+/(?:-/)?)?commits?/([0-9a-f]{7,40})\\b`, 'gi'), shas);
   return { issues, pulls, shas };
 }
 
