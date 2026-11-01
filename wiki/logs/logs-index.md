@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.13.1](1/13/1/CHANGELOG.md) | Agent split by job, platform adapter, parallel lookups, grouped services | `CHANGELOG.md` |
 | [1.13.0](1/13/0/CHANGELOG.md) | Five AI providers with your own keys; provider and model per user, org and repository | `CHANGELOG.md` |
 | [1.12.0](1/12/0/CHANGELOG.md) | Stored logs for the owner, logged 401s, setup check at start | `CHANGELOG.md` |
 | [1.11.1](1/11/1/CHANGELOG.md) | User line in the reply footer, LXAgents reply marker | `CHANGELOG.md` |
