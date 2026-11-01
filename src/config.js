@@ -67,6 +67,19 @@ module.exports = {
     // The most tool rounds a comment may ask for ("run this 5 times"); 3 when it names none.
     maxToolRounds: Math.max(1, Number(process.env.MAX_TOOL_ROUNDS) || 20),
   },
+  // The agent's development environments (GitHub Codespaces), used by the workspace tools.
+  workspace: {
+    // One answer that may use the workspace tools: a codespace takes minutes to start.
+    taskTimeoutMs: Number(process.env.WORKSPACE_TASK_TIMEOUT_MS) || 900_000,
+    // How long create_workspace waits for the codespace to become Available.
+    bootTimeoutMs: Number(process.env.WORKSPACE_BOOT_TIMEOUT_MS) || 300_000,
+    // One exec_command run.
+    execTimeoutMs: Number(process.env.WORKSPACE_EXEC_TIMEOUT_MS) || 300_000,
+    // GitHub stops an idle codespace after this many minutes (5 to 240).
+    idleTimeoutMinutes: Math.min(240, Math.max(5, Number(process.env.WORKSPACE_IDLE_TIMEOUT_MINUTES) || 10)),
+    // The gh CLI that runs commands over `gh codespace ssh`.
+    ghPath: process.env.GH_PATH || 'gh',
+  },
   worker: {
     inline: process.env.WORKER_INLINE !== 'false',
     pollMs: Number(process.env.WORKER_POLL_MS) || 5000,
