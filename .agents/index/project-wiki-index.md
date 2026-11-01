@@ -13,6 +13,7 @@ description: Index of wiki/ — the human documentation: guides, reference pages
 | File | Purpose |
 |---|---|
 | [`wiki/guides/asking-the-agent.md`](../../wiki/guides/asking-the-agent.md) | Triggers, providers and keys, what the agent reads, error codes, no answer |
+| [`wiki/guides/chat.md`](../../wiki/guides/chat.md) | Chat rooms (user, repository, org), sessions, the event stream and how the agent answers there |
 | [`wiki/guides/setup.md`](../../wiki/guides/setup.md) | Local setup, databases, GitHub App and GitLab bot permissions |
 | [`wiki/guides/dashboard-access.md`](../../wiki/guides/dashboard-access.md) | OAuth sign-in, roles, org and repository import, key order |
 | [`wiki/guides/docker.md`](../../wiki/guides/docker.md) | The Docker image, its entrypoint and hosting platforms |

@@ -63,6 +63,22 @@ for org members.
 Keys are returned with their last four characters only. Errors are JSON `{ "error": "..." }`
 with 400, 401, 403, 404 or 409.
 
+## Chat API (`/api/chat`)
+
+Signed in like the user API. `room` is `user:{accountId}`, `repo:{repoId}` or `org:{orgId}`;
+see [Chat rooms](../guides/chat.md).
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/rooms` | `{ user, orgs, repos }`: the rooms you may join now |
+| GET | `/sessions?room=` | The room's sessions, latest first |
+| POST | `/sessions` | `{ room, title? }` |
+| PATCH | `/sessions/:id` | `{ room, title }` |
+| DELETE | `/sessions/:id?room=` | Only the starter in repo and org rooms |
+| GET | `/messages?room=&sessionId=` | The session's last 200 stored messages, oldest first |
+| POST | `/messages` | `{ room, sessionId?, content }`; 201 `{ message, sessionId, agent: "answering" \| "busy" \| "idle" }` |
+| GET | `/stream?room=` | Server-Sent Events for every session in the room |
+
 ## Command line (on the server host)
 
 ```bash

@@ -163,6 +163,59 @@ async function isRepoAdmin(platform, token, user, repo) {
   }
 }
 
+// The user's access to an imported repository right now, from their own token: "admin",
+// "write", "read" or "none", plus its default branch. GitHub: the repository's permissions for
+// the token. GitLab: the larger of the project and group access levels. Asked live, never stored.
+async function repoAccess(platform, token, user, repo) {
+  const api = client(platform, token);
+  try {
+    if (platform === 'github') {
+      const [owner, name] = String(repo.fullName).split('/');
+      const { data } = await api.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
+      if (String(data.id) !== String(repo.externalId)) return { level: 'none', defaultBranch: null };
+      const p = data.permissions || {};
+      let level = 'none';
+      if (p.admin) level = 'admin';
+      else if (p.push || p.maintain) level = 'write';
+      else if (p.pull || p.triage) level = 'read';
+      return { level, defaultBranch: data.default_branch || null };
+    }
+    const projectId = String(repo.externalId);
+    if (!NUMERIC_ID.test(projectId)) return { level: 'none', defaultBranch: null };
+    const { data } = await api.get(`/projects/${encodeURIComponent(projectId)}`);
+    const perms = data.permissions || {};
+    const access = Math.max((perms.project_access && perms.project_access.access_level) || 0, (perms.group_access && perms.group_access.access_level) || 0);
+    let level = 'none';
+    if (access >= GITLAB_MAINTAINER) level = 'admin';
+    else if (access >= 30) level = 'write';
+    else if (access >= 10) level = 'read';
+    return { level, defaultBranch: data.default_branch || null };
+  } catch (err) {
+    if ([403, 404].includes(status(err))) return { level: 'none', defaultBranch: null };
+    throw platformError(platform, err);
+  }
+}
+
+// Whether the user is in the org right now (any role), from their own token. A personal
+// account counts only for its owner.
+async function isOrgMember(platform, token, user, orgName) {
+  if (sameName(orgName, user.login)) return true;
+  const api = client(platform, token);
+  try {
+    if (platform === 'github') {
+      const { data } = await api.get(`/user/memberships/orgs/${encodeURIComponent(orgName)}`);
+      return data.state === 'active';
+    }
+    const userId = String(user.id);
+    if (!NUMERIC_ID.test(userId)) return false;
+    const { data } = await api.get(`/groups/${encodeURIComponent(orgName)}/members/all/${encodeURIComponent(userId)}`);
+    return Number(data.access_level) >= 10;
+  } catch (err) {
+    if ([403, 404].includes(status(err))) return false;
+    throw platformError(platform, err);
+  }
+}
+
 // GitHub only: every installation of the App, by "org:name" or "user:name" (lower case).
 // The list is read from /app/installations, so no user-supplied name goes into a URL.
 async function githubInstallations() {
@@ -192,4 +245,4 @@ async function findGithubInstallation(name, kind, installations) {
   return byAccount.get(`${kind === 'user' ? 'user' : 'org'}:${String(name).toLowerCase()}`) || null;
 }
 
-module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, githubInstallations, findGithubInstallation };
+module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, repoAccess, isOrgMember, githubInstallations, findGithubInstallation };

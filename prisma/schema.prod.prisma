@@ -154,6 +154,38 @@ model AgentTask {
   updatedAt DateTime @updatedAt
 }
 
+// One conversation in a chat room (owen's chat_sessions table, fitted to the project). A room
+// ("user:github:1001", "repo:<Repository id>", "org:<AppInstallation id>") holds many sessions.
+// createdBy is "{platform}:{account id}" of whoever started it, or null for the agent's own
+// activity session.
+model ChatSession {
+  id        String        @id @default(cuid())
+  room      String
+  title     String        @default("New Chat")
+  createdBy String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([room, updatedAt])
+}
+
+// One stored message of a session (owen's chat_messages table). role is "user" or "assistant";
+// type is "message" or "report". Progress and streamed tokens are live only and never stored.
+model ChatMessage {
+  id          String      @id @default(cuid())
+  sessionId   String
+  role        String
+  type        String      @default("message")
+  senderId    String?
+  senderLogin String?
+  content     String
+  createdAt   DateTime    @default(now())
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
 // Server log lines the owner reads on the dashboard's Logs page. Kept LOG_RETENTION_DAYS days.
 model Log {
   id        String   @id @default(cuid())
