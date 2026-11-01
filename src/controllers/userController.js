@@ -60,11 +60,12 @@ async function listImportable(req, res) {
   const imported = await prisma.appInstallation.findMany({ where: { platform } });
   const byName = new Map(imported.map((o) => [lower(o.orgName), o]));
 
-  // One installation lookup per org not yet imported, all at once.
+  // One list of the App's installations answers every org at once.
+  const installations = platform === 'github' ? await platforms.githubInstallations() : null;
   const result = await Promise.all(
     owned.map(async (org) => {
       const existing = byName.get(lower(org.name));
-      const installationId = platform === 'github' && !existing ? await platforms.findGithubInstallation(org.name, org.kind) : null;
+      const installationId = installations && !existing ? await platforms.findGithubInstallation(org.name, org.kind, installations) : null;
       let reason = null;
       if (existing) reason = 'already imported';
       else if (platform === 'github' && !installationId) reason = 'GitHub App is not installed';

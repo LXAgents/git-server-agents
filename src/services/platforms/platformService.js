@@ -163,25 +163,33 @@ async function isRepoAdmin(platform, token, user, repo) {
   }
 }
 
-// GitHub logins and org names: letters, digits and single hyphens, at most 39 characters.
-const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
-
-// GitHub only: the App installation on an org or user account, or null if not installed.
-async function findGithubInstallation(name, kind) {
-  if (!GITHUB_LOGIN.test(String(name))) return null;
+// GitHub only: every installation of the App, by "org:name" or "user:name" (lower case).
+// The list is read from /app/installations, so no user-supplied name goes into a URL.
+async function githubInstallations() {
   const api = axios.create({
     baseURL: config.github.apiUrl,
     headers: { Authorization: `Bearer ${github.appJwt()}`, Accept: 'application/vnd.github+json' },
     timeout: 15_000,
   });
-  const path = kind === 'user' ? `/users/${encodeURIComponent(name)}/installation` : `/orgs/${encodeURIComponent(name)}/installation`;
   try {
-    const { data } = await api.get(path);
-    return String(data.id);
+    const items = await paginate(api, '/app/installations', {});
+    const byAccount = new Map();
+    for (const i of items) {
+      const account = i.account || {};
+      const kind = account.type === 'User' ? 'user' : 'org';
+      byAccount.set(`${kind}:${String(account.login).toLowerCase()}`, String(i.id));
+    }
+    return byAccount;
   } catch (err) {
-    if (status(err) === 404) return null;
     throw new HttpError(502, `github App API error: ${err.message}`);
   }
 }
 
-module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, findGithubInstallation };
+// GitHub only: the App installation on an org or user account, or null if not installed.
+// Pass `installations` from githubInstallations() to look up many accounts with one list.
+async function findGithubInstallation(name, kind, installations) {
+  const byAccount = installations || (await githubInstallations());
+  return byAccount.get(`${kind === 'user' ? 'user' : 'org'}:${String(name).toLowerCase()}`) || null;
+}
+
+module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, githubInstallations, findGithubInstallation };
