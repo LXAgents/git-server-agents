@@ -1,7 +1,7 @@
 ---
 name: agent-pr-branch
 description: Task record for telling the agent its own pull request's branches and letting it read its own PR (server 1.17.0).
-status: in-progress
+status: done
 ---
 
 # The agent knows its own PR's branches
@@ -17,8 +17,8 @@ status: in-progress
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
 | 1 | Plan | This record | git-server-agents | `plan/agent-pr-branch` | `.agents/` | #81 |
-| 2 | PR branches | Payload refs, prompt line, own-PR read tool, tests, docs | git-server-agents | `feat/pr-branch` | `src/services/agent/`, `src/services/eventService.js`, `test/`, `wiki/` | |
-| 3 | Release | 1.17.0 changelog and version | git-server-agents | `release/1.17.0` | `package.json`, `wiki/logs/` | |
+| 2 | PR branches | Payload refs, prompt line, own-PR read tool, tests, docs | git-server-agents | `feat/pr-branch` | `src/services/agent/`, `src/services/eventService.js`, `test/`, `wiki/` | #82 |
+| 3 | Release | 1.17.0 changelog and version | git-server-agents | `release/1.17.0` | `package.json`, `wiki/logs/` | #83 |
 
 ### Task 1 — plan/agent-pr-branch
 
@@ -32,3 +32,7 @@ This record was written before the work. Nothing else changed.
 - `read_pull_request` is offered on a PR thread without a mention, and its `number` may be left out for this PR.
 - owen's follow-up (2026-11-01, "What !1 about?" was answered about issue #2): on GitHub `!N` now names an issue, and the tool guide says `!12` is an issue and `#12` a PR (or an issue). GitLab keeps its own `#` issue / `!` MR. The guide also tells the model to answer about the mentioned thread, or say it can't be read, instead of falling back to this one.
 - Tests: 201 pass on SQLite.
+
+### Task 3 — release/1.17.0
+
+Version 1.17.0, the changelog at `wiki/logs/1/17/0/CHANGELOG.md` and its index row.
