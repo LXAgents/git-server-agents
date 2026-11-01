@@ -71,6 +71,41 @@ and pull requests (merge requests on GitLab):
   you why. On GitHub, `close_issue` refuses a number that is a pull request, and a merged pull
   request can't be reopened.
 
+## Working in a codespace (GitHub)
+
+On GitHub, a commenter with write access can also ask the agent to run code. The agent starts a
+GitHub Codespace (a cloud machine with the repository checked out), runs commands there, and
+commits and pushes a branch:
+
+```
+@lxagents run the tests on this branch and tell me what fails
+@lxagents fix the lint errors, push them to fix/lint and open a pull request
+```
+
+| Tool | Does | Arguments |
+|---|---|---|
+| `create_workspace` | Starts a codespace and waits until it is Available (one to three minutes) | `branch` (default: this PR's head, else the default branch) |
+| `exec_command` | Runs a bash command in the repository folder; returns `stdout`, `stderr`, `exitCode`, cut to 10,000 characters | `workspaceId`, `command` |
+| `commit_workspace` | `git checkout -B`, `git add -A`, `git commit`, `git push -u origin` | `workspaceId`, `commitMessage`, `branchName` |
+| `delete_workspace` | Deletes the codespace | `workspaceId` |
+
+- **Key:** a workspace key, which is a GitHub personal access token with the `codespace` scope (and
+  `repo` to push), added on the dashboard for yourself, an org or a repository. The agent tries
+  the repository's keys, then the org's, then yours, each by priority, and moves to the next key
+  when GitHub refuses one. Repository keys are only used for its collaborators, org keys only for
+  org members. Without a key you may use, the tools are not offered.
+- **Who pays:** the codespace runs on the key owner's account and bills it. Pushes are made as
+  the key's owner.
+- **Limits:** at most two codespaces per answer, only codespaces the answer created can be
+  reached, and every codespace still open is deleted when the answer ends. GitHub also stops an
+  idle one after `WORKSPACE_IDLE_TIMEOUT_MINUTES`. Such an answer may take up to
+  `WORKSPACE_TASK_TIMEOUT_MS` (15 minutes) instead of 4.
+- **Never the default branch:** `commit_workspace` refuses to push to it; ask for a pull request
+  from the pushed branch instead.
+- **Server:** commands go through `gh codespace ssh`, so the server needs the `gh` CLI and an SSH
+  client (the Docker image has both). Errors come back as `NO_WORKSPACE_KEY`,
+  `WORKSPACE_ERROR` or `WORKSPACE_UNAVAILABLE`.
+
 ## Providers and keys (bring your own key)
 
 | Provider | Slug | Model ids look like | API |

@@ -43,3 +43,10 @@ This record was written before the work. Nothing else changed.
 - `config.workspace` (`WORKSPACE_*_MS`, `WORKSPACE_IDLE_TIMEOUT_MINUTES`, `GH_PATH`), `.env.example`, configuration page.
 - Dockerfile installs `gh` from GitHub's apt repository and `openssh-client`. Not built in the sandbox.
 - Tests: `test/codespaces.test.js` (mock REST API, mocked `execFile`).
+
+### Task 4 — feat/workspace-tools
+
+- `agent/workspaceTools.js`: `create_workspace`, `exec_command`, `commit_workspace`, `delete_workspace`. Keys are tried in fallback order on create (401/403/404/422 → next key); each workspace remembers its key handle and every call reveals the token again. Only codespaces created in this answer are reachable, at most two, and `cleanup()` deletes what is left (called in a `finally` in `agent/index.js`). Output capped at 10,000 characters (end kept). `commit_workspace` quotes its arguments for the remote shell and refuses the default branch. Returns `{ handlers, cleanup, openWorkspaces }` so `cleanup` is never a tool.
+- Offered when the platform adapter has `workspaces: true` (GitHub), the commenter passes `canManage`, and `findWorkspaceKeys` finds a key with the same membership rules as AI keys. Such answers use `WORKSPACE_TASK_TIMEOUT_MS`.
+- `agentErrors.js`: `NO_WORKSPACE_KEY`, `WORKSPACE_ERROR`, `WORKSPACE_UNAVAILABLE`. Tool guide explains the tools.
+- Tests: `test/workspaceTools.test.js`. Docs: asking-the-agent, code layout.

@@ -15,6 +15,8 @@ const { platformOf } = require('./platform');
 const { isOrgMember, isRepoMember, canManage } = require('./membership');
 const { createThreadActions } = require('./threadActions');
 const { createThreadReader } = require('./threadReader');
+const { createWorkspaceTools } = require('./workspaceTools');
+const { findWorkspaceKeys, DEFAULT_WORKSPACE_PROVIDER } = require('../workspaceKeyService');
 const { findReferences } = require('./references');
 const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require('./prompt');
 const { parseLoopLimit } = require('./loopLimit');
@@ -93,7 +95,27 @@ async function chooseModelAndKeys(task, payload, comment, parsed, identity, acce
       `No active ${providerInfo.name} key for you${orgNote}. Log in to the dashboard with ${platformName} and add your own ${providerInfo.name} key.`
     );
   }
-  return { model: chosen.model, providerInfo, baseUrl: provider.url || providerInfo.url(), candidates };
+  return { model: chosen.model, providerInfo, baseUrl: provider.url || providerInfo.url(), candidates, account, repository, member, repoMember };
+}
+
+// The workspace tools, when this commenter may have them: GitHub only, write access only, and
+// a workspace key they may use (repository keys for its members, org keys for org members, then
+// their own). Anything that cannot be confirmed means no workspace tools (fail closed).
+async function workspaceFor(task, comment, access, choice, manage, head) {
+  if (!platformOf(task.platform).workspaces || !manage || !comment.repo) return null;
+  try {
+    const keys = await findWorkspaceKeys(
+      DEFAULT_WORKSPACE_PROVIDER,
+      choice.account,
+      choice.member ? access.installation : null,
+      choice.repoMember ? choice.repository : null
+    );
+    if (keys.length === 0) return null;
+    return createWorkspaceTools({ repo: comment.repo, defaultBranch: comment.defaultBranch, branch: head || null, keys, logMeta: taskMeta(task) });
+  } catch (err) {
+    log.warn('agent', `task ${task.id}: no workspace tools: ${logSafe(err.message)}`, taskMeta(task));
+    return null;
+  }
 }
 
 // Everything after the trigger check. `ctx` collects the token and model as they become known,
@@ -121,34 +143,45 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   // Other threads are read only when the commenter's own message mentions them.
   const refs = findReferences(parsed.prompt, { platform: task.platform, repoPath: api.repoPath(comment) });
   const reader = createThreadReader({ platform: task.platform, thread: comment, token, refs });
-  const repo = ref ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions, reader }) : null;
+  const workspace = ref ? await workspaceFor(task, comment, access, choice, manage, head) : null;
+  const repo = ref
+    ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions, reader, workspace: workspace && workspace.handlers })
+    : null;
+  // A codespace takes minutes to start, so an answer that may use one gets the longer limit.
+  const limitMs = workspace ? config.workspace.taskTimeoutMs : config.ai.taskTimeoutMs;
   const request = {
     provider: providerInfo.slug,
     baseUrl,
     model,
-    deadline: ctx.started + config.ai.taskTimeoutMs,
-    limitMs: config.ai.taskTimeoutMs,
+    deadline: ctx.started + limitMs,
+    limitMs,
     label: `task ${task.id}: `,
     logMeta: taskMeta(task),
     spend: newSpend(),
   };
   const { rounds } = parseLoopLimit(parsed.prompt);
-  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)${actions ? ', with the manage tools' : ''}`, request.logMeta);
-  const answer = await chatWithFallback(
-    candidates,
-    (key) =>
-      converse({
-        request,
-        apiKey: key.apiKey,
-        system: buildSystemPrompt(comment, diff, { head, base, sha: ref !== comment.defaultBranch ? ref : null }),
-        toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader) }),
-        maxRounds: rounds,
-        history: buildHistory(thread, comment.commentId),
-        question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
-        repo,
-      }),
-    request.logMeta
-  );
+  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)${actions ? ', with the manage tools' : ''}${workspace ? ', with the workspace tools' : ''}`, request.logMeta);
+  let answer;
+  try {
+    answer = await chatWithFallback(
+      candidates,
+      (key) =>
+        converse({
+          request,
+          apiKey: key.apiKey,
+          system: buildSystemPrompt(comment, diff, { head, base, sha: ref !== comment.defaultBranch ? ref : null }),
+          toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader), workspace: Boolean(workspace) }),
+          maxRounds: rounds,
+          history: buildHistory(thread, comment.commentId),
+          question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
+          repo,
+        }),
+      request.logMeta
+    );
+  } finally {
+    // Codespaces bill their key's owner: none outlives the answer that opened it.
+    if (workspace) await workspace.cleanup();
+  }
 
   const footer = replyFooter({
     model,
