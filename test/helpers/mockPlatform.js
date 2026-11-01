@@ -160,6 +160,13 @@ function createMockPlatform() {
   app.post('/oa/chat/completions', express.json(), (req, res) => {
     if (bearer(req) !== 'sk-openai-good') return res.status(401).json({ error: { message: 'Incorrect API key provided' } });
     chatRequests.push({ provider: 'openai', body: req.body });
+    if (req.body.stream) {
+      // Streamed as Chat Completions SSE, a few characters per chunk.
+      res.set('content-type', 'text/event-stream');
+      const text = `openai says hi to ${req.body.model}`;
+      for (let i = 0; i < text.length; i += 5) res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text.slice(i, i + 5) } }] })}\n\n`);
+      return res.end('data: [DONE]\n\n');
+    }
     return res.json({ choices: [{ message: { role: 'assistant', content: `openai says hi to ${req.body.model}` } }] });
   });
   app.get('/ds/models', (req, res) => res.json({ data: bearer(req) ? [{ id: 'deepseek-reasoner' }, { id: 'deepseek-chat' }] : [] }));

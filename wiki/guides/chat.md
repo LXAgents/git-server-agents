@@ -40,6 +40,18 @@ The stream (`GET /api/chat/stream?room=...`) sends every event of every session 
 Read the stream with `fetch` and the `Authorization` header; `EventSource` cannot send it, and
 the token never goes in a URL.
 
+## Answers to comments in the chat
+
+When the agent answers a comment, the commenter's user room and the repository's room (when the
+repository is imported) see it live: an "Answering @login on owner/repo#12" progress event, a
+progress event per tool call, the answer's text as `token` events, and a `report` with the
+final answer (or the error reply) stored in the room's "Agent activity" session. The text is
+streamed from the provider only while someone has one of those rooms open; otherwise the
+provider is asked exactly as before.
+
+A `progress` event with `data.reset: true` starts a new model call: clear the text streamed so
+far. The stored `message` or `report` that follows is the final text.
+
 ## How the agent answers
 
 The provider, model and keys follow the room: repo room → the repository's, then the org's (for
