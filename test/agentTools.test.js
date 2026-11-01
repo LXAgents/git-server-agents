@@ -149,3 +149,64 @@ test('loop limits are read from plain words, default to 3 and are capped', () =>
   assert.deepEqual(parseLoopLimit('hello', { max: 20 }), { rounds: 3, requested: null });
   assert.equal(parseLoopLimit('hello', { max: 2 }).rounds, 2);
 });
+
+const { createThreadActions } = require('../src/services/agent/threadActions');
+const gitlab = require('../src/services/platforms/gitlabService');
+
+const issueThread = { kind: 'issue', number: 3, repo: 'acme/web', projectId: 12 };
+const manageRepo = (platform = 'github', thread = issueThread) =>
+  createRepoTools({ platform, repo: 'acme/web', projectId: 12, ref: 'abc123', token: 't' }, { actions: createThreadActions({ platform, thread, token: 't', asker: 'alice' }) });
+
+test('the issue tools are only offered with actions, with clear schemas', () => {
+  assert.deepEqual(repoFor().tools.map((tool) => tool.function.name), ['list_files', 'read_file']);
+  const tools = manageRepo().tools;
+  assert.deepEqual(tools.map((tool) => tool.function.name), ['list_files', 'read_file', 'create_issue', 'close_issue', 'reopen_issue']);
+  const create = tools.find((tool) => tool.function.name === 'create_issue').function;
+  assert.deepEqual(create.parameters.required, ['title']);
+  assert.ok(create.parameters.properties.body);
+  assert.equal(tools.find((tool) => tool.function.name === 'close_issue').function.parameters.properties.number.type, 'integer');
+});
+
+test('create, close and reopen issues on GitHub, defaulting to this thread', async (t) => {
+  t.mock.method(github, 'createIssue', async (_repo, fields) => ({ number: 9, url: 'https://gh/acme/web/issues/9', state: 'open', fields }));
+  t.mock.method(github, 'setIssueState', async (_repo, number, state) => ({ number, state, url: `https://gh/acme/web/issues/${number}` }));
+  const repo = manageRepo();
+  assert.equal(await repo.run('create_issue', '{"title":" Flaky test ","body":"It fails","labels":["bug"]}'), 'Created issue #9: https://gh/acme/web/issues/9');
+  const [, fields] = github.createIssue.mock.calls[0].arguments;
+  assert.equal(fields.title, 'Flaky test');
+  assert.deepEqual(fields.labels, ['bug']);
+  assert.match(fields.body, /^It fails\n\n<sub>Opened by LXAgents for `@alice`<\/sub>$/);
+  assert.equal(await repo.run('close_issue', '{}'), 'Issue #3 is now closed: https://gh/acme/web/issues/3');
+  assert.equal(await repo.run('reopen_issue', '{"number":"#5"}'), 'Issue #5 is now open: https://gh/acme/web/issues/5');
+  assert.deepEqual(github.setIssueState.mock.calls[0].arguments.slice(0, 4), ['acme/web', 3, 'closed', { reason: 'completed' }]);
+  assert.deepEqual(github.setIssueState.mock.calls[1].arguments.slice(0, 4), ['acme/web', 5, 'open', { reason: undefined }]);
+});
+
+test('GitLab issue tools use the project id', async (t) => {
+  t.mock.method(gitlab, 'createIssue', async () => ({ number: 2, url: 'https://gl/grp/app/-/issues/2', state: 'opened' }));
+  t.mock.method(gitlab, 'setIssueState', async (_p, number) => ({ number, state: 'closed', url: 'u' }));
+  const repo = manageRepo('gitlab');
+  assert.match(await repo.run('create_issue', '{"title":"T"}'), /Created issue #2/);
+  assert.equal(gitlab.createIssue.mock.calls[0].arguments[0], 12);
+  await repo.run('close_issue', '{"number":7}');
+  assert.deepEqual(gitlab.setIssueState.mock.calls[0].arguments, [12, 7, 'closed']);
+});
+
+test('bad arguments and platform refusals come back to the model as errors', async (t) => {
+  const repo = manageRepo('github', { kind: 'pull_request', number: 8, repo: 'acme/web' });
+  t.mock.method(github, 'createIssue', async () => {
+    throw httpError(422, { message: 'Validation Failed', errors: [{ message: 'label does not exist' }] });
+  });
+  t.mock.method(github, 'setIssueState', async (_repo, number) => {
+    if (number === 8) throw Object.assign(new Error('#8 is a pull request, not an issue'), { notIssue: true });
+    throw httpError(403, { message: 'Resource not accessible by integration' });
+  });
+  assert.equal(await repo.run('create_issue', '{}'), 'Error: create_issue: a non-empty "title" is required.');
+  assert.match(await repo.run('create_issue', '{"title":"x","labels":"bug"}'), /"labels" must be a list/);
+  assert.equal(await repo.run('create_issue', '{"title":"x"}'), 'Error: create_issue failed (HTTP 422: Validation Failed; label does not exist).');
+  assert.equal(await repo.run('close_issue', '{}'), 'Error: close_issue: this comment is not on an issue, so give the issue "number".');
+  assert.equal(await repo.run('close_issue', '{"number":"abc"}'), 'Error: close_issue: "number" must be a positive issue number such as 12.');
+  assert.equal(await repo.run('close_issue', '{"number":8}'), 'Error: close_issue: #8 is a pull request, not an issue.');
+  assert.match(await repo.run('close_issue', '{"number":4}'), /HTTP 403: Resource not accessible by integration\)\. The app may lack the permission/);
+  assert.match(await repoFor().run('close_issue', '{}'), /unknown tool close_issue/);
+});

@@ -1,4 +1,5 @@
-// Who may spend org and repository keys. Any failure to confirm counts as "no" (fail closed).
+// Who may spend org and repository keys, and who may change issues and pull requests. Any
+// failure to confirm counts as "no" (fail closed).
 const { platformOf } = require('./platform');
 const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
@@ -25,4 +26,16 @@ async function isRepoMember(platform, identity, comment, orgMember, token) {
   }
 }
 
-module.exports = { isOrgMember, isRepoMember };
+// Creating, closing and reopening issues and pull requests is offered only to commenters with
+// write access to the repository. Anyone in an imported org can ask the agent, so without this
+// check anyone could close a pull request through it.
+async function canManage(platform, identity, comment, token) {
+  try {
+    return Boolean(await platformOf(platform).canWrite(identity, comment, token));
+  } catch (err) {
+    log.warn('agent', `could not confirm write access for ${logSafe(identity.triggerUser)}: ${logSafe(err.message)}`, { platform });
+    return false;
+  }
+}
+
+module.exports = { isOrgMember, isRepoMember, canManage };
