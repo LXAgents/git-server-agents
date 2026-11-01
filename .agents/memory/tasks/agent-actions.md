@@ -1,7 +1,7 @@
 ---
 name: agent-actions
 description: Task record for the comment-set tool loop limit and the issue and pull request / merge request tools (server 1.15.0).
-status: in progress
+status: done
 ---
 
 # Loop limits and issue / PR tools for the agent
@@ -16,11 +16,11 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/agent-actions` | `.agents/` | |
-| 2 | Loop limit | Rounds read from the comment, tool guide in the prompt | git-server-agents | `feat/agent-loop-limit` | `src/services/agent/`, `src/config.js`, `test/`, `wiki/` | |
-| 3 | Issue tools | Create, close, reopen issues; write-access check | git-server-agents | `feat/issue-tools` | `src/services/agent/`, `src/services/platforms/`, `test/`, `wiki/` | |
-| 4 | Pull request tools | Create, close, reopen PRs and MRs | git-server-agents | `feat/pull-request-tools` | `src/services/agent/`, `src/services/platforms/`, `test/`, `wiki/` | |
-| 5 | Release | 1.15.0 changelog and version | git-server-agents | `release/1.15.0` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/agent-actions` | `.agents/` | #73 |
+| 2 | Loop limit | Rounds read from the comment, tool guide in the prompt | git-server-agents | `feat/agent-loop-limit` | `src/services/agent/`, `src/config.js`, `test/`, `wiki/` | #74 |
+| 3 | Issue tools | Create, close, reopen issues; write-access check | git-server-agents | `feat/issue-tools` | `src/services/agent/`, `src/services/platforms/`, `test/`, `wiki/` | #75 |
+| 4 | Pull request tools | Create, close, reopen PRs and MRs | git-server-agents | `feat/pull-request-tools` | `src/services/agent/`, `src/services/platforms/`, `test/`, `wiki/` | #76 |
+| 5 | Release | 1.15.0 changelog and version | git-server-agents | `release/1.15.0` | `package.json`, `wiki/logs/` | #77 |
 
 ### Task 1 — plan/agent-actions
 
@@ -48,3 +48,7 @@ This record was written before the work. Nothing else changed.
 - `create_pull_request` (`title`, `head` required; `base` defaults to the default branch; `body`, `draft`), `close_pull_request`, `reopen_pull_request`. Branch names are checked before any call; it never creates branches or commits.
 - A create that already succeeded in this answer is not repeated (a key fallback reruns the tool loop, and models repeat themselves); the second call returns the first result.
 - Docs: the asking-the-agent table and examples; the GitLab bot needs Developer for merge requests. Tests: 187 pass on SQLite.
+
+### Task 5 — release/1.15.0
+
+Version 1.15.0, the changelog at `wiki/logs/1/15/0/CHANGELOG.md` and its index row. The PR column is filled in. No dashboard change.
