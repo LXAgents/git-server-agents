@@ -24,6 +24,11 @@ app.get('/gh/repos/acme/web/issues/:number', (req, res) =>
 );
 app.patch('/gh/repos/acme/web/issues/:number', (req, res) => res.json(ghIssue(Number(req.params.number), req.body.state)));
 
+app.post('/gh/repos/acme/web/pulls', (req, res) => res.status(201).json({ number: 21, state: 'open', html_url: 'https://github.com/acme/web/pull/21' }));
+app.patch('/gh/repos/acme/web/pulls/:number', (req, res) =>
+  res.json({ number: Number(req.params.number), state: req.body.state, merged: false, html_url: `https://github.com/acme/web/pull/${req.params.number}` })
+);
+
 // GitLab: project 12; user 8 is a Developer, 9 a blocked Maintainer.
 app.get('/gl/projects/12/members/all/:id', (req, res) => {
   const members = { 8: { id: 8, access_level: 30, state: 'active' }, 9: { id: 9, access_level: 40, state: 'blocked' } };
@@ -32,6 +37,11 @@ app.get('/gl/projects/12/members/all/:id', (req, res) => {
 const glIssue = (iid, state) => ({ iid, state, web_url: `https://gitlab.com/grp/app/-/issues/${iid}` });
 app.post('/gl/projects/12/issues', (req, res) => res.status(201).json(glIssue(5, 'opened')));
 app.put('/gl/projects/12/issues/:iid', (req, res) => res.json(glIssue(Number(req.params.iid), req.body.state_event === 'close' ? 'closed' : 'opened')));
+
+app.post('/gl/projects/12/merge_requests', (req, res) => res.status(201).json({ iid: 4, state: 'opened', web_url: 'https://gitlab.com/grp/app/-/merge_requests/4' }));
+app.put('/gl/projects/12/merge_requests/:iid', (req, res) =>
+  res.json({ iid: Number(req.params.iid), state: req.body.state_event === 'close' ? 'closed' : 'opened', web_url: 'u' })
+);
 
 let server;
 let github;
@@ -95,4 +105,29 @@ test('GitLab: creates issues and closes or reopens them with state_event', async
   assert.deepEqual(last('PUT', '/gl/projects/12/issues/4').body, { state_event: 'close' });
   await gitlab.setIssueState(12, 4, 'open');
   assert.deepEqual(last('PUT', '/gl/projects/12/issues/4').body, { state_event: 'reopen' });
+});
+
+test('GitHub: creates pull requests and closes or reopens them on the pulls endpoint', async () => {
+  const fields = { title: 'T', body: 'B', head: 'fix/x', base: 'main', draft: false };
+  assert.deepEqual(await github.createPullRequest('acme/web', fields, 't'), { number: 21, url: 'https://github.com/acme/web/pull/21', state: 'open' });
+  assert.deepEqual(last('POST', '/gh/repos/acme/web/pulls').body, fields);
+  assert.equal((await github.setPullRequestState('acme/web', 8, 'closed', 't')).state, 'closed');
+  assert.deepEqual(last('PATCH', '/gh/repos/acme/web/pulls/8').body, { state: 'closed' });
+  await github.setPullRequestState('acme/web', 8, 'open', 't');
+  assert.deepEqual(last('PATCH', '/gh/repos/acme/web/pulls/8').body, { state: 'open' });
+});
+
+test('GitLab: creates merge requests (Draft: prefix) and closes or reopens them', async () => {
+  assert.deepEqual(await gitlab.createMergeRequest(12, { title: 'T', body: 'B', head: 'feat/x', base: 'main', draft: true }), {
+    number: 4,
+    url: 'https://gitlab.com/grp/app/-/merge_requests/4',
+    state: 'open',
+  });
+  assert.deepEqual(last('POST', '/gl/projects/12/merge_requests').body, { title: 'Draft: T', description: 'B', source_branch: 'feat/x', target_branch: 'main' });
+  await gitlab.createMergeRequest(12, { title: 'T', body: '', head: 'feat/x', base: 'main' });
+  assert.equal(last('POST', '/gl/projects/12/merge_requests').body.title, 'T');
+  assert.equal((await gitlab.setMergeRequestState(12, 4, 'closed')).state, 'closed');
+  assert.deepEqual(last('PUT', '/gl/projects/12/merge_requests/4').body, { state_event: 'close' });
+  assert.equal((await gitlab.setMergeRequestState(12, 4, 'open')).state, 'open');
+  assert.deepEqual(last('PUT', '/gl/projects/12/merge_requests/4').body, { state_event: 'reopen' });
 });

@@ -170,6 +170,17 @@ async function setIssueState(repo, number, state, { reason } = {}, token) {
   return { number: data.number, url: data.html_url, state: data.state };
 }
 
+async function createPullRequest(repo, { title, body, head, base, draft }, token) {
+  const { data } = await axios.post(`${repoUrl(repo)}/pulls`, { title, body, head, base, draft: Boolean(draft) }, { headers: headers(token) });
+  return { number: data.number, url: data.html_url, state: data.state };
+}
+
+// Opens or closes a pull request. A merged pull request cannot be reopened; GitHub answers 422.
+async function setPullRequestState(repo, number, state, token) {
+  const { data } = await axios.patch(`${repoUrl(repo)}/pulls/${number}`, { state }, { headers: headers(token) });
+  return { number: data.number, url: data.html_url, state: data.merged ? 'merged' : data.state };
+}
+
 module.exports = {
   isCollaborator,
   appJwt,
@@ -185,4 +196,6 @@ module.exports = {
   getCollaboratorPermission,
   createIssue,
   setIssueState,
+  createPullRequest,
+  setPullRequestState,
 };
