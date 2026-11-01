@@ -12,6 +12,7 @@ description: Index of .agents/memory/tasks — one row per task record.
 
 | File | Purpose |
 |---|---|
+| [`tasks/agent-actions.md`](../memory/tasks/agent-actions.md) | Task record for the comment-set tool loop limit and the issue and pull request tools (server 1.15.0). |
 | [`tasks/agent-context.md`](../memory/tasks/agent-context.md) | Task record for agent chat history, repository file reading and stricter trigger and key rules (1.4.0). |
 | [`tasks/agent-error-replies.md`](../memory/tasks/agent-error-replies.md) | Task record for error replies from the agent, refusing personal access tokens, and the scoped package name (1.10.0). |
 | [`tasks/agent-pickup-and-speed.md`](../memory/tasks/agent-pickup-and-speed.md) | Task record for the eyes reaction on pickup, step logs, parallel tasks and time limits (1.11.0). |
