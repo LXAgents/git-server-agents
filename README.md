@@ -43,11 +43,11 @@ all come from the REST APIs.
 
 ## Asking the agent
 
-Start line 1 of the comment with `@agents` or with an OpenRouter model, `@vendor/model`. The
+Start line 1 of the comment with `@lxagents` or with an OpenRouter model, `@vendor/model`. The
 question can follow on the same line or on the next lines:
 
 ```
-@agents What files do I have under src/services, and what does agentService.js do?
+@lxagents What files do I have under src/services, and what does agentService.js do?
 ```
 
 ```
@@ -55,7 +55,7 @@ question can follow on the same line or on the next lines:
 Review this diff.
 ```
 
-- **`@agents`** uses the stored provider and model: the repository's, then the org's, then the
+- **`@lxagents`** uses the stored provider and model: the repository's, then the org's, then the
   commenting user's, then `DEFAULT_PROVIDER` / `DEFAULT_MODEL` (`openrouter` /
   `openrouter/free`). They are set in the dashboard or the user API, per modality; the agent
   uses the `text` one.
@@ -173,7 +173,7 @@ the same way in `src/db.js`.
 | `GITHUB_URL`, `GITLAB_URL` | Web addresses for OAuth (default `https://github.com`, and `GITLAB_API_URL` without `/api/v4`). Change them only for GitHub Enterprise or self-managed GitLab |
 | `PUBLIC_URL` | This server's public address, used for the OAuth callback URL. Set it behind a proxy or on a platform |
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
-| `DEFAULT_PROVIDER`, `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter`, `openrouter/free`). The commenter still needs their own key for it |
+| `DEFAULT_PROVIDER`, `DEFAULT_MODEL` | What `@lxagents` uses when no repository, org or user model is set (default `openrouter`, `openrouter/free`). The commenter still needs their own key for it |
 | `OPENROUTER_API_URL`, `OPENAI_API_URL`, `ANTHROPIC_API_URL`, `DEEPSEEK_API_URL`, `ZAI_API_URL` | Each provider's API base URL (defaults in the providers table above); the seed stores them |
 | `MAX_OUTPUT_TOKENS` | The longest answer a provider may write (default 16000; Anthropic requires a limit) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
