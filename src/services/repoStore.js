@@ -1,5 +1,6 @@
 // Imported repositories (GitHub) and projects (GitLab), as the agent and the APIs see them.
 const prisma = require('../db');
+const { settingsMap } = require('./modelService');
 
 // The repository a webhook event came from, if one of its admins added it, and only when it
 // sits in the org the event was whitelisted under.
@@ -18,7 +19,7 @@ function repoView(r) {
     fullName: r.fullName,
     org: r.appInstallation ? { id: r.appInstallation.id, name: r.appInstallation.orgName } : { id: r.appInstallationId, name: null },
     keyCount: r._count ? r._count.keys : undefined,
-    models: r.models ? Object.fromEntries(r.models.map((m) => [m.modality, m.model])) : undefined,
+    models: r.models ? settingsMap(r.models) : undefined,
     createdAt: r.createdAt,
   };
 }

@@ -4,6 +4,9 @@
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
 const models = require('../services/modelService');
+const keyService = require('../services/keyService');
+const { providerParam, listProviders } = require('../services/providers');
+const { requireRepoAdmin } = require('./repoController');
 const platforms = require('../services/platformService');
 const { orgViews, nameUserOwners } = require('./adminController');
 const { HttpError } = require('../errors');
@@ -122,9 +125,31 @@ async function deleteOrgKey(req, res) {
   res.sendStatus(204);
 }
 
-// OpenRouter's live model list for one modality (only text for now).
+// The AI providers a key or model can use, for the dashboard's dropdown.
+function listAiProviders(_req, res) {
+  res.json(listProviders());
+}
+
+// One provider's live model list for one modality (only text for now). Providers other than
+// OpenRouter list models only to a key holder, so the caller's own key is used, or the key of
+// the org (?orgId=) or repository (?repoId=) they manage, tried first.
 async function listModels(req, res) {
-  res.json(await models.listModels(String(req.query.modality || 'text')));
+  const provider = providerParam(req.query.provider);
+  let apiKey = null;
+  if (provider.keyForModels) {
+    const owners = [];
+    if (req.query.repoId) {
+      const repo = await requireRepoAdmin({ ...req, params: { id: String(req.query.repoId) } });
+      owners.push({ repositoryId: repo.id });
+    }
+    if (req.query.orgId) {
+      const org = await requireOrgOwner({ ...req, params: { id: String(req.query.orgId) } });
+      owners.push({ appInstallationId: org.id });
+    }
+    owners.push(ownKeys(req.user));
+    apiKey = await keyService.firstKey(provider.slug, owners);
+  }
+  res.json(await models.listModels(String(req.query.modality || 'text'), provider.slug, { apiKey }));
 }
 
 async function getOwnModels(req, res) {
@@ -147,6 +172,7 @@ async function setOrgModel(req, res) {
 
 module.exports = {
   me,
+  listAiProviders,
   listModels,
   getOwnModels,
   setOwnModel,

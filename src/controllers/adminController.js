@@ -4,6 +4,8 @@
 // rows from the other platform are neither listed nor changed.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
+const { settingsMap } = require('../services/modelService');
+const { listProviders } = require('../services/providers');
 const profiles = require('../services/profileService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const { PLATFORMS } = require('../services/platformService');
@@ -81,7 +83,7 @@ function orgView(o, ownerProfile) {
     installationId: o.installationId,
     owner: { platform: o.accountType, id: o.accountId, ...profiles.describe(o.accountId, ownerProfile) },
     keyCount: o._count ? o._count.keys : undefined,
-    models: o.models ? Object.fromEntries(o.models.map((m) => [m.modality, m.model])) : undefined,
+    models: o.models ? settingsMap(o.models) : undefined,
     createdAt: o.createdAt,
   };
 }
@@ -161,6 +163,11 @@ async function createKey(req, res) {
   res.status(201).json(view);
 }
 
+// The AI providers a key or model can use, for the dashboard's dropdown.
+function providers(_req, res) {
+  res.json(listProviders());
+}
+
 async function deleteKey(req, res) {
   await keyStore.deleteKey({ id: req.params.id, ...onPlatform(req.admin.platform) });
   res.sendStatus(204);
@@ -177,6 +184,7 @@ module.exports = {
   listKeys,
   createKey,
   deleteKey,
+  providers,
   orgView,
   orgViews,
   nameUserOwners,
