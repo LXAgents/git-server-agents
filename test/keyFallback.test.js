@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const openRouter = require('../src/services/openRouterService');
+const openRouter = require('../src/services/ai/openRouterService');
 const { chatWithFallback } = require('../src/services/agentService');
 
 const keys = [

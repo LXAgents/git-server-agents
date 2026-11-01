@@ -2,10 +2,10 @@
 // live model catalogue.
 const axios = require('axios');
 const crypto = require('crypto');
-require('../http');
-const prisma = require('../db');
-const config = require('../config');
-const { HttpError } = require('../errors');
+require('../../http');
+const prisma = require('../../db');
+const config = require('../../config');
+const { HttpError } = require('../../errors');
 const llm = require('./llmService');
 const { findProvider, providerParam, isValidModel } = require('./providers');
 

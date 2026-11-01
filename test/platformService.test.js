@@ -7,7 +7,7 @@ let platforms;
 
 test.before(async () => {
   mock = await startMockPlatform();
-  platforms = require('../src/services/platformService');
+  platforms = require('../src/services/platforms/platformService');
 });
 test.after(() => mock.close());
 

@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
-require('../http');
-const config = require('../config');
+require('../../http');
+const config = require('../../config');
 
 const tokenCache = new Map();
 

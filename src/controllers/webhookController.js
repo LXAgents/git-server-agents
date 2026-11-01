@@ -1,6 +1,6 @@
 const config = require('../config');
-const { verifyGithubSignature, verifyGitlabToken } = require('../services/signatureService');
-const { githubIdentity, gitlabIdentity } = require('../services/identityService');
+const { verifyGithubSignature, verifyGitlabToken } = require('../services/platforms/signatureService');
+const { githubIdentity, gitlabIdentity } = require('../services/platforms/identityService');
 const whitelist = require('../services/whitelistService');
 const tasks = require('../services/taskService');
 const { toComment } = require('../services/eventService');

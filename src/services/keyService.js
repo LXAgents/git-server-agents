@@ -1,7 +1,7 @@
 const prisma = require('../db');
 const { decrypt } = require('./cryptoService');
 const log = require('./logService');
-const { findProvider } = require('./providers');
+const { findProvider } = require('./ai/providers');
 
 const byPriority = [{ priority: 'desc' }, { createdAt: 'asc' }];
 

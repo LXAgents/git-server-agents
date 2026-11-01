@@ -77,7 +77,7 @@ function createMockPlatform() {
   });
 
   gh.use((req, res, next) => {
-    if (req.path.endsWith('/installation')) return next();
+    if (req.path === '/app/installations') return next();
     req.user = githubUsers[bearer(req)];
     return req.user ? next() : res.status(401).json({ message: 'Bad credentials' });
   });
@@ -97,10 +97,15 @@ function createMockPlatform() {
     const repo = (githubRepos[req.user.login] || []).find((r) => r.full_name === `${req.params.owner}/${req.params.name}`);
     return repo ? res.json(repo) : res.status(404).json({ message: 'Not Found' });
   });
-  gh.get('/:kind/:name/installation', (req, res) => {
+  gh.get('/app/installations', (req, res) => {
     if (!/^Bearer [\w-]+\.[\w-]+\.[\w-]+$/.test(req.get('authorization') || '')) return res.status(401).end();
-    const id = githubInstallations[`${req.params.kind}/${req.params.name}`];
-    return id ? res.json({ id }) : res.status(404).json({ message: 'Not Found' });
+    if ((Number(req.query.page) || 1) > 1) return res.json([]);
+    res.json(
+      Object.entries(githubInstallations).map(([key, id]) => {
+        const [kind, login] = key.split('/');
+        return { id, account: { login, type: kind === 'users' ? 'User' : 'Organization' } };
+      })
+    );
   });
 
   gl.use((req, res, next) => {

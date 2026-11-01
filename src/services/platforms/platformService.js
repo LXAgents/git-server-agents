@@ -1,10 +1,10 @@
 // Asks GitHub or GitLab, with the signed-in user's own token, who the user is and what they
 // own. Nothing here is cached or stored: roles are checked live on every org change.
 const axios = require('axios');
-require('../http');
-const config = require('../config');
+require('../../http');
+const config = require('../../config');
 const github = require('./githubService');
-const { HttpError } = require('../errors');
+const { HttpError } = require('../../errors');
 
 const PLATFORMS = ['github', 'gitlab'];
 const GITLAB_OWNER = 50;
@@ -163,19 +163,33 @@ async function isRepoAdmin(platform, token, user, repo) {
   }
 }
 
-// GitHub only: the App installation on an org or user account, or null if not installed.
-async function findGithubInstallation(name, kind) {
-  const path = kind === 'user' ? `/users/${encodeURIComponent(name)}/installation` : `/orgs/${encodeURIComponent(name)}/installation`;
+// GitHub only: every installation of the App, by "org:name" or "user:name" (lower case).
+// The list is read from /app/installations, so no user-supplied name goes into a URL.
+async function githubInstallations() {
+  const api = axios.create({
+    baseURL: config.github.apiUrl,
+    headers: { Authorization: `Bearer ${github.appJwt()}`, Accept: 'application/vnd.github+json' },
+    timeout: 15_000,
+  });
   try {
-    const { data } = await axios.get(`${config.github.apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${github.appJwt()}`, Accept: 'application/vnd.github+json' },
-      timeout: 15_000,
-    });
-    return String(data.id);
+    const items = await paginate(api, '/app/installations', {});
+    const byAccount = new Map();
+    for (const i of items) {
+      const account = i.account || {};
+      const kind = account.type === 'User' ? 'user' : 'org';
+      byAccount.set(`${kind}:${String(account.login).toLowerCase()}`, String(i.id));
+    }
+    return byAccount;
   } catch (err) {
-    if (status(err) === 404) return null;
     throw new HttpError(502, `github App API error: ${err.message}`);
   }
 }
 
-module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, findGithubInstallation };
+// GitHub only: the App installation on an org or user account, or null if not installed.
+// Pass `installations` from githubInstallations() to look up many accounts with one list.
+async function findGithubInstallation(name, kind, installations) {
+  const byAccount = installations || (await githubInstallations());
+  return byAccount.get(`${kind === 'user' ? 'user' : 'org'}:${String(name).toLowerCase()}`) || null;
+}
+
+module.exports = { PLATFORMS, getUser, getUserById, listOwnedOrgs, isOwner, listAdminRepos, isRepoAdmin, githubInstallations, findGithubInstallation };

@@ -1,6 +1,6 @@
 const axios = require('axios');
-require('../http');
-const config = require('../config');
+require('../../http');
+const config = require('../../config');
 
 function client() {
   if (!config.gitlab.token) throw new Error('GITLAB_TOKEN is required');

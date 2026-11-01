@@ -44,7 +44,7 @@ const orgs = {};
 test.before(async () => {
   mock = await startMockPlatform();
   prisma = require('../src/db');
-  models = require('../src/services/modelService');
+  models = require('../src/services/ai/modelService');
   const { createApp } = require('../src/app');
   await cleanup();
   for (const [type, id] of WHITELIST) await prisma.account.create({ data: { type, id } });

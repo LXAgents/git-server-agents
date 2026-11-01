@@ -2,7 +2,7 @@
 // dashboard gets a sealed one-time code in the fragment and swaps it with POST /exchange.
 const crypto = require('crypto');
 const config = require('../config');
-const oauth = require('../services/oauthService');
+const oauth = require('../services/platforms/oauthService');
 const { HttpError } = require('../errors');
 
 const NONCE_COOKIE = 'gsa_oauth_nonce';

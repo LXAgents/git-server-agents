@@ -3,7 +3,7 @@
 const prisma = require('../db');
 const { encrypt, decrypt } = require('./cryptoService');
 const { HttpError } = require('../errors');
-const { findProvider, providerParam } = require('./providers');
+const { findProvider, providerParam } = require('./ai/providers');
 const { findProviderRow } = require('./keyService');
 
 const include = { provider: true, appInstallation: true, account: true, repository: true };

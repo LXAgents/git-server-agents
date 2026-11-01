@@ -1,9 +1,9 @@
 // The AI providers the agent can call. Every key is brought by a user, an org or a repo
 // (strict BYOK): nothing here holds a key. The Provider table mirrors this list (see
 // prisma/seed.js); `slug` is the stable name the API and ModelSetting use.
-const config = require('../config');
-const { HttpError } = require('../errors');
-const { MODEL_ID: OPENROUTER_MODEL } = require('./commentParser');
+const config = require('../../config');
+const { HttpError } = require('../../errors');
+const { MODEL_ID: OPENROUTER_MODEL } = require('../commentParser');
 
 // OpenRouter ids are always "vendor/name"; the other providers use bare ids such as
 // "gpt-5", "claude-opus-5-5", "deepseek-chat" or "glm-4.6".

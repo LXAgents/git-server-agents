@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { githubIdentity, gitlabIdentity } = require('../src/services/identityService');
+const { githubIdentity, gitlabIdentity } = require('../src/services/platforms/identityService');
 
 test('reads the GitHub sender and organization', () => {
   const identity = githubIdentity({

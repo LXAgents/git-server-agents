@@ -2,7 +2,7 @@
 // base URL: DeepSeek (https://api.deepseek.com) and z.ai GLM (https://api.z.ai/api/paas/v4).
 // Returns the assistant message ({ content, tool_calls?, cost }) like openRouterService.
 const axios = require('axios');
-const config = require('../config');
+const config = require('../../config');
 
 // Every failure is tagged source "provider" with the provider's name, so agentErrors can tell
 // it from a platform error and name the provider in the reply.

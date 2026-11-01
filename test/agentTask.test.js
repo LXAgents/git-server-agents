@@ -2,13 +2,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const github = require('../src/services/githubService');
-const gitlab = require('../src/services/gitlabService');
+const github = require('../src/services/platforms/githubService');
+const gitlab = require('../src/services/platforms/gitlabService');
 const whitelist = require('../src/services/whitelistService');
 const keys = require('../src/services/keyService');
-const openRouter = require('../src/services/openRouterService');
-const anthropic = require('../src/services/anthropicService');
-const models = require('../src/services/modelService');
+const openRouter = require('../src/services/ai/openRouterService');
+const anthropic = require('../src/services/ai/anthropicService');
+const models = require('../src/services/ai/modelService');
 const repoStore = require('../src/services/repoStore');
 const { processTask } = require('../src/services/agentService');
 const { REPLY_MARKER, ERROR_MARKER } = require('../src/services/eventService');

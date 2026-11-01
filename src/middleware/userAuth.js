@@ -1,4 +1,4 @@
-const platforms = require('../services/platformService');
+const platforms = require('../services/platforms/platformService');
 const profiles = require('../services/profileService');
 const owners = require('../services/ownerService');
 const { HttpError } = require('../errors');

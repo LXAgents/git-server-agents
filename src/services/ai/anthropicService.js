@@ -2,7 +2,7 @@
 // shape (system/user/assistant/tool messages, OpenAI-style tools), so requests and replies are
 // translated here, and the reply comes back as { content, tool_calls?, cost } like the others.
 const Anthropic = require('@anthropic-ai/sdk');
-const config = require('../config');
+const config = require('../../config');
 
 const Client = Anthropic.default || Anthropic;
 

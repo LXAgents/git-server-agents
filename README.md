@@ -400,8 +400,12 @@ src/worker.js    queue worker (`npm run worker` to run alone)
 src/routes/      webhook, auth, admin and user routes
 src/controllers/ webhook, auth, admin, user and repository controllers
 src/middleware/  owner and platform-token sign-in, CORS
-src/services/    signature, identity, org check, task, comment parser, agent errors, GitHub, GitLab,
-                 platform roles, OAuth, OpenRouter, model, key, key store, repository
-                 and crypto services
+src/services/    org check, task, comment parser, agent errors, key, key store, repository,
+                 access checks, shared views, logs and crypto services
+  agent/         the agent: flow (index.js), prompt, tool loop, key fallback, cost,
+                 membership, repository tools, and the GitHub/GitLab adapter
+  ai/            providers, llmService and the OpenRouter, OpenAI and Anthropic clients,
+                 model settings and live model lists
+  platforms/     GitHub and GitLab APIs, platform roles, OAuth, signatures, identity
 test/            node:test suites (`npm test`)
 ```

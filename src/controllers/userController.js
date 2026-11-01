@@ -3,12 +3,12 @@
 // whether the user owns that org; the answer is never stored.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
-const models = require('../services/modelService');
+const models = require('../services/ai/modelService');
 const keyService = require('../services/keyService');
-const { providerParam, listProviders } = require('../services/providers');
-const { requireRepoAdmin } = require('./repoController');
-const platforms = require('../services/platformService');
-const { orgViews, nameUserOwners } = require('./adminController');
+const { providerParam, listProviders } = require('../services/ai/providers');
+const access = require('../services/access');
+const platforms = require('../services/platforms/platformService');
+const { orgViews, nameUserOwners } = require('../services/views');
 const { HttpError } = require('../errors');
 
 const lower = (s) => String(s).toLowerCase();
@@ -60,15 +60,18 @@ async function listImportable(req, res) {
   const imported = await prisma.appInstallation.findMany({ where: { platform } });
   const byName = new Map(imported.map((o) => [lower(o.orgName), o]));
 
-  const result = [];
-  for (const org of owned) {
-    const existing = byName.get(lower(org.name));
-    const installationId = platform === 'github' && !existing ? await platforms.findGithubInstallation(org.name, org.kind) : null;
-    let reason = null;
-    if (existing) reason = 'already imported';
-    else if (platform === 'github' && !installationId) reason = 'GitHub App is not installed';
-    result.push({ name: org.name, kind: org.kind, importable: !reason, reason, appInstallationId: existing ? existing.id : null });
-  }
+  // One list of the App's installations answers every org at once.
+  const installations = platform === 'github' ? await platforms.githubInstallations() : null;
+  const result = await Promise.all(
+    owned.map(async (org) => {
+      const existing = byName.get(lower(org.name));
+      const installationId = installations && !existing ? await platforms.findGithubInstallation(org.name, org.kind, installations) : null;
+      let reason = null;
+      if (existing) reason = 'already imported';
+      else if (platform === 'github' && !installationId) reason = 'GitHub App is not installed';
+      return { name: org.name, kind: org.kind, importable: !reason, reason, appInstallationId: existing ? existing.id : null };
+    })
+  );
   res.json(result);
 }
 
@@ -95,32 +98,24 @@ async function importOrg(req, res) {
   res.status(201).json(view);
 }
 
-async function requireOrgOwner(req) {
-  const org = await prisma.appInstallation.findUnique({ where: { id: req.params.id } });
-  if (!org || org.platform !== req.user.platform) throw new HttpError(404, 'org not found');
-  const owner = await platforms.isOwner(req.user.platform, req.user.token, req.user, org.orgName);
-  if (!owner) throw new HttpError(403, `you are not an owner of ${org.orgName}`);
-  return org;
-}
-
 async function deleteOrg(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   await prisma.appInstallation.delete({ where: { id: org.id } });
   res.sendStatus(204);
 }
 
 async function listOrgKeys(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   res.json(await keyStore.listKeys({ appInstallationId: org.id }));
 }
 
 async function createOrgKey(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   res.status(201).json(await keyStore.createKey({ appInstallationId: org.id }, req.body || {}));
 }
 
 async function deleteOrgKey(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   await keyStore.deleteKey({ id: req.params.keyId, appInstallationId: org.id });
   res.sendStatus(204);
 }
@@ -139,11 +134,11 @@ async function listModels(req, res) {
   if (provider.keyForModels) {
     const owners = [];
     if (req.query.repoId) {
-      const repo = await requireRepoAdmin({ ...req, params: { id: String(req.query.repoId) } });
+      const repo = await access.requireRepoAdmin(req.user, req.query.repoId);
       owners.push({ repositoryId: repo.id });
     }
     if (req.query.orgId) {
-      const org = await requireOrgOwner({ ...req, params: { id: String(req.query.orgId) } });
+      const org = await access.requireOrgOwner(req.user, req.query.orgId);
       owners.push({ appInstallationId: org.id });
     }
     owners.push(ownKeys(req.user));
@@ -161,12 +156,12 @@ async function setOwnModel(req, res) {
 }
 
 async function getOrgModels(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   res.json(await models.getModels({ appInstallationId: org.id }));
 }
 
 async function setOrgModel(req, res) {
-  const org = await requireOrgOwner(req);
+  const org = await access.requireOrgOwner(req.user, req.params.id);
   res.json(await models.setModel({ appInstallationId: org.id }, req.body || {}));
 }
 
