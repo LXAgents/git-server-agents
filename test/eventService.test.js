@@ -54,7 +54,7 @@ test('ignores replies that carry the new or the pre-1.11.1 marker', () => {
       action: 'created',
       repository,
       issue: { number: 3, title: 'Bug' },
-      comment: { body: `@agents hi\n${marker}`, user: { type: 'User' } },
+      comment: { body: `@lxagents hi\n${marker}`, user: { type: 'User' } },
     });
     assert.equal(comment, null);
   }

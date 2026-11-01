@@ -100,7 +100,7 @@ test('each level stores a provider with its model, checked against that provider
   await put('/models/settings', 'gh-bob', { modality: 'text', model: null });
 });
 
-test('@agents resolves the repo provider and model, then the org, then the user, then the default', async () => {
+test('@lxagents resolves the repo provider and model, then the org, then the user, then the default', async () => {
   const repo = await prisma.repository.create({
     data: { platform: 'github', externalId: 'resolve-1', fullName: 'acme/resolve', appInstallationId: orgs.acme.id },
   });

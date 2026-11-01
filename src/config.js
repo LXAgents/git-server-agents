@@ -47,7 +47,7 @@ module.exports = {
     ownerId: ownerId('GITLAB_ADMIN_ID'),
   },
   ai: {
-    // What "@agents" uses when no repo, org or user model is set. The server has no key of its
+    // What "@lxagents" uses when no repo, org or user model is set. The server has no key of its
     // own for any provider: the commenter, org or repo still needs a key for this provider.
     defaultProvider: String(process.env.DEFAULT_PROVIDER || 'openrouter').toLowerCase(),
     defaultModel: process.env.DEFAULT_MODEL || 'openrouter/free',

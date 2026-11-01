@@ -22,11 +22,16 @@ test('returns an empty prompt for a model line alone', () => {
   assert.deepEqual(parseComment('@meta/llama-3'), { auto: false, model: 'meta/llama-3', prompt: '' });
 });
 
-test('@agents on line 1 asks for the stored model', () => {
-  assert.deepEqual(parseComment('@agents\nWhy does this fail?'), { auto: true, model: null, prompt: 'Why does this fail?' });
-  assert.deepEqual(parseComment('@Agents why does this fail?'), { auto: true, model: null, prompt: 'why does this fail?' });
-  assert.equal(parseComment('Hi\n@agents why?').auto, false);
-  assert.equal(parseComment('@agentsmith why?').auto, false);
+test('@lxagents on line 1 asks for the stored model', () => {
+  assert.deepEqual(parseComment('@lxagents\nWhy does this fail?'), { auto: true, model: null, prompt: 'Why does this fail?' });
+  assert.deepEqual(parseComment('@LXAgents why does this fail?'), { auto: true, model: null, prompt: 'why does this fail?' });
+  assert.equal(parseComment('Hi\n@lxagents why?').auto, false);
+  assert.equal(parseComment('@lxagentsmith why?').auto, false);
+});
+
+test('the old @agents word no longer triggers the agent', () => {
+  assert.deepEqual(parseComment('@agents why does this fail?'), { auto: false, model: null, prompt: '@agents why does this fail?' });
+  assert.equal(stripTrigger('@agents\nfirst'), '@agents\nfirst');
 });
 
 test('the question can follow the model on the same line', () => {
@@ -34,7 +39,7 @@ test('the question can follow the model on the same line', () => {
 });
 
 test('stripTrigger keeps only the question, for the history', () => {
-  assert.equal(stripTrigger('@agents\nfirst'), 'first');
+  assert.equal(stripTrigger('@lxagents\nfirst'), 'first');
   assert.equal(stripTrigger('@openai/gpt-5 second'), 'second');
   assert.equal(stripTrigger('@alice look'), '@alice look');
 });

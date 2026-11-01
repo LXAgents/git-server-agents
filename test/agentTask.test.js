@@ -57,7 +57,7 @@ function stubAll(t, { member = true, history = [], repository = null, collaborat
   return calls;
 }
 
-test('a comment without @agents or @vendor/model on line 1 is skipped before any API call', async (t) => {
+test('a comment without @lxagents or @vendor/model on line 1 is skipped before any API call', async (t) => {
   const calls = stubAll(t);
   for (const body of ['What files do I have?', '@alice what do you think?', 'hi @openrouter/free']) {
     assert.equal(await processTask(githubTask(body)), 'skipped');
@@ -69,7 +69,7 @@ test('a comment without @agents or @vendor/model on line 1 is skipped before any
 
 test('a trigger with no question gets a NO_QUESTION reply instead of silence', async (t) => {
   const calls = stubAll(t);
-  for (const body of ['@openrouter/free', '@agents']) {
+  for (const body of ['@openrouter/free', '@lxagents']) {
     await assert.rejects(processTask(githubTask(body)), /asks nothing/);
   }
   assert.equal(calls.complete.length, 0);
@@ -126,7 +126,7 @@ test('a failed error reply is logged and the task still fails with the original 
   });
   const logged = [];
   t.mock.method(console, 'error', (line) => logged.push(line));
-  await assert.rejects(processTask(githubTask('@agents')), /asks nothing/);
+  await assert.rejects(processTask(githubTask('@lxagents')), /asks nothing/);
   assert.match(logged[0], /could not post the error reply/);
 });
 
@@ -221,21 +221,21 @@ test('a GitLab MR reads notes, the diff and files at the MR head commit', async 
   assert.deepEqual(keys.getProviderKeys.mock.calls[0].arguments[2], installation);
 });
 
-test('@agents uses the stored model, and the footer names it', async (t) => {
+test('@lxagents uses the stored model, and the footer names it', async (t) => {
   const calls = stubAll(t, { stored: 'anthropic/claude-x' });
-  assert.equal(await processTask(githubTask('@agents what changed?')), 'success');
+  assert.equal(await processTask(githubTask('@lxagents what changed?')), 'success');
   assert.equal(calls.complete[0].model, 'anthropic/claude-x');
   assert.equal(models.resolveModel.mock.calls[0].arguments[0].account.id, '1001');
   assert.match(calls.posted[0].body, /Model: `anthropic\/claude-x`/);
 });
 
-test('@agents dispatches to the stored provider with that provider\'s keys', async (t) => {
+test('@lxagents dispatches to the stored provider with that provider\'s keys', async (t) => {
   const calls = stubAll(t, { stored: 'claude-opus-5-5', storedProvider: 'anthropic' });
   t.mock.method(anthropic, 'complete', async (req) => {
     calls.complete.push(req);
     return { content: 'From Claude.', cost: null };
   });
-  assert.equal(await processTask(githubTask('@agents what changed?')), 'success');
+  assert.equal(await processTask(githubTask('@lxagents what changed?')), 'success');
   assert.equal(keys.getProviderKeys.mock.calls[0].arguments[0], 'anthropic');
   assert.equal(calls.complete[0].model, 'claude-opus-5-5');
   assert.equal(calls.complete[0].apiKey, 'sk-user');
@@ -246,7 +246,7 @@ test('@agents dispatches to the stored provider with that provider\'s keys', asy
 test('strict BYOK: no key for the stored provider means no model call and a NO_API_KEY reply naming it', async (t) => {
   const calls = stubAll(t, { stored: 'deepseek-chat', storedProvider: 'deepseek' });
   t.mock.method(keys, 'getProviderKeys', async () => ({ provider: {}, keys: [] }));
-  await assert.rejects(processTask(githubTask('@agents hi')), /No active DeepSeek key/);
+  await assert.rejects(processTask(githubTask('@lxagents hi')), /No active DeepSeek key/);
   assert.equal(calls.complete.length, 0);
   assert.match(calls.posted[0].body, /`NO_API_KEY`/);
   assert.match(calls.posted[0].body, /DeepSeek key/);
@@ -262,7 +262,7 @@ test('@vendor/model overrides the stored model', async (t) => {
 test('repo keys go to org members without another check', async (t) => {
   const repository = { id: 'repo-row' };
   const calls = stubAll(t, { member: true, repository });
-  await processTask(githubTask('@agents hi'));
+  await processTask(githubTask('@lxagents hi'));
   assert.equal(calls.keys[0].repo, repository);
   assert.equal(github.isCollaborator.mock.callCount(), 0);
 });
@@ -270,7 +270,7 @@ test('repo keys go to org members without another check', async (t) => {
 test('repo keys go to a collaborator who is not an org member, but org keys do not', async (t) => {
   const repository = { id: 'repo-row' };
   const calls = stubAll(t, { member: false, collaborator: true, repository });
-  await processTask(githubTask('@agents hi'));
+  await processTask(githubTask('@lxagents hi'));
   assert.deepEqual(github.isCollaborator.mock.calls[0].arguments, ['acme/web', 'alice', 'inst-token']);
   assert.equal(calls.keys[0].repo, repository);
   assert.equal(calls.keys[0].inst, null);
@@ -278,7 +278,7 @@ test('repo keys go to a collaborator who is not an org member, but org keys do n
 
 test('someone outside the repo and org gets only their own keys', async (t) => {
   const calls = stubAll(t, { member: false, collaborator: false, repository: { id: 'repo-row' } });
-  await processTask(githubTask('@agents hi'));
+  await processTask(githubTask('@lxagents hi'));
   assert.equal(calls.keys[0].repo, null);
   assert.equal(calls.keys[0].inst, null);
 });
@@ -295,7 +295,7 @@ test('a GitLab project member gets the repo keys', async (t) => {
   const payload = {
     project: { id: 12, path_with_namespace: 'grp/app', default_branch: 'main' },
     user: { id: 8, username: 'dave' },
-    object_attributes: { id: 6, note: '@agents\nhi', noteable_type: 'Issue', action: 'create' },
+    object_attributes: { id: 6, note: '@lxagents\nhi', noteable_type: 'Issue', action: 'create' },
     issue: { iid: 2, title: 'Issue' },
   };
   assert.equal(await processTask({ id: 't3', platform: 'gitlab', event: 'note', payload: JSON.stringify(payload) }), 'success');

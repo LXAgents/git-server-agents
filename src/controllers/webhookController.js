@@ -26,7 +26,7 @@ function refuse(res, platform, reason) {
   return res.status(401).json({ error: reason });
 }
 
-// A new comment whose line 1 is a trigger (@agents or @vendor/model). Nothing else is queued.
+// A new comment whose line 1 is a trigger (@lxagents or @vendor/model). Nothing else is queued.
 function isTrigger(platform, event, payload) {
   const comment = toComment(platform, event, payload);
   if (!comment) return false;

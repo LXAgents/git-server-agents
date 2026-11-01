@@ -55,7 +55,7 @@ async function firstModel(owner, modality) {
   return prisma.modelSetting.findFirst({ where: { ...owner, modality } });
 }
 
-// What "@agents" uses: the repo's provider and model, then the org's, then the user's, then
+// What "@lxagents" uses: the repo's provider and model, then the org's, then the user's, then
 // DEFAULT_PROVIDER / DEFAULT_MODEL. Returns { provider, model, source }.
 async function resolveModel({ repository, installation, account }, modality = 'text') {
   const chain = [

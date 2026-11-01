@@ -1,10 +1,10 @@
 // Line 1 of a comment decides whether the agent answers, and with which model:
-//   "@agents …"          use the model stored for the repo, org or user (see modelService)
+//   "@lxagents …"          use the model stored for the repo, org or user (see modelService)
 //   "@vendor/model …"    use that OpenRouter model, e.g. "@nvidia/nemotron-3.5-super-vl:free"
 // The question may follow on the same line or on the next lines. Model ids are always
 // "vendor/name", so "@alice can you look?" is an ordinary mention, not a request.
 const MODEL_ID = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._:+-]+$/;
-const AGENTS = '@agents';
+const TRIGGER = '@lxagents';
 
 // The first whitespace-separated word of a line, and the rest of it.
 function splitFirstWord(line) {
@@ -12,9 +12,9 @@ function splitFirstWord(line) {
   return match ? [line.slice(0, match.index), line.slice(match.index + 1).trim()] : [line, ''];
 }
 
-// The trigger word on line 1: { auto: true } for @agents, { model } for @vendor/model, or null.
+// The trigger word on line 1: { auto: true } for @lxagents, { model } for @vendor/model, or null.
 function readTrigger(word) {
-  if (word.toLowerCase() === AGENTS) return { auto: true, model: null };
+  if (word.toLowerCase() === TRIGGER) return { auto: true, model: null };
   if (word.startsWith('@') && MODEL_ID.test(word.slice(1))) return { auto: false, model: word.slice(1) };
   return null;
 }

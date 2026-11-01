@@ -68,7 +68,7 @@ async function chooseModelAndKeys(task, payload, comment, parsed, identity, acce
     isOrgMember(task.platform, identity, payload, token),
   ]);
   const [chosen, repoMember] = await Promise.all([
-    // "@vendor/model" names an OpenRouter model; "@agents" uses the stored provider and model.
+    // "@vendor/model" names an OpenRouter model; "@lxagents" uses the stored provider and model.
     parsed.model ? { provider: 'openrouter', model: parsed.model } : models.resolveModel({ repository, installation: access.installation, account }, modality),
     repository ? isRepoMember(task.platform, identity, comment, member, token) : false,
   ]);
@@ -154,10 +154,10 @@ async function processTask(task) {
   const comment = toComment(task.platform, task.event, payload);
   if (!comment) return 'skipped';
 
-  // The agent only answers when line 1 starts with "@agents" or names a model ("@openrouter/free").
+  // The agent only answers when line 1 starts with "@lxagents" or names a model ("@openrouter/free").
   const parsed = parseComment(comment.commentBody);
   if (!(parsed.auto || parsed.model)) {
-    log.info('agent', `task ${task.id} skipped: line 1 must start with @agents or @vendor/model`, taskMeta(task));
+    log.info('agent', `task ${task.id} skipped: line 1 must start with @lxagents or @vendor/model`, taskMeta(task));
     return 'skipped';
   }
 
