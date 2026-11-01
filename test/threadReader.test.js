@@ -47,9 +47,18 @@ function stubGithub(t) {
 test('the read tools are offered only when something is mentioned, or for commits on a PR', () => {
   assert.deepEqual(Object.keys(readerFor('what is this?')), []);
   assert.deepEqual(Object.keys(readerFor('compare with #12')), ['read_issue', 'read_pull_request', 'list_commits', 'read_commit']);
-  assert.deepEqual(Object.keys(readerFor('explain the commits', prThread)), ['list_commits', 'read_commit']);
+  assert.deepEqual(Object.keys(readerFor('explain the commits', prThread)), ['read_pull_request', 'list_commits', 'read_commit']);
   const tools = createRepoTools({ platform: 'github', repo: 'acme/web', ref: 'abc', token: 't' }, { reader: readerFor('see #12') }).tools;
   assert.deepEqual(tools.map((tool) => tool.function.name), ['list_files', 'read_file', 'read_issue', 'read_pull_request', 'list_commits', 'read_commit']);
+});
+
+test('a PR reads itself without a mention or a number', async (t) => {
+  stubGithub(t);
+  const reader = readerFor('which branch is this?', prThread);
+  assert.match(await reader.read_pull_request({}), /^Pull request #8: PR 8\n.*\nBranches: fix\/x into main\n/s);
+  assert.match(await reader.read_pull_request({ number: 8 }), /^Pull request #8/);
+  await assert.rejects(reader.read_pull_request({ number: 9 }), /#9 is not mentioned/);
+  await assert.rejects(readerFor('see #12').read_pull_request({}), /a "number" is required/);
 });
 
 test('an issue reads a mentioned issue and a mentioned PR with its diff, and nothing else', async (t) => {

@@ -96,8 +96,7 @@ const READ_THREAD_TOOLS = [
   fn(
     'read_pull_request',
     'Read a pull request (merge request on GitLab) the commenter mentioned, or this one: title, state, branches, description, last comments and its diff.',
-    { number: { type: 'integer', description: 'The pull request number, e.g. 12 for #12 (!12 on GitLab).' } },
-    ['number']
+    { number: { type: 'integer', description: 'The pull request number, e.g. 12 for #12 (!12 on GitLab). Leave it out for this one.' } }
   ),
   fn('list_commits', 'List the commits of this pull request (merge request on GitLab), or of one the commenter mentioned: sha, title and author, oldest first.', {
     number: NUMBER_ARG('pull request'),
