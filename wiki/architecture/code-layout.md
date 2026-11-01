@@ -12,7 +12,8 @@ src/middleware/  owner and platform-token sign-in, CORS
 src/services/    org check, task, comment parser, agent errors, key, key store, repository,
                  access checks, shared views, logs and crypto services
   agent/         the agent: flow (index.js), prompt, tool loop and its round limit, key fallback, cost,
-                 membership, repository tools, issue and pull request actions, and the GitHub/GitLab adapter
+                 membership, repository tools, issue and pull request actions, mention parsing and
+                 thread reading, and the GitHub/GitLab adapter
   ai/            providers, llmService and the OpenRouter, OpenAI and Anthropic clients,
                  model settings and live model lists
   platforms/     GitHub and GitLab APIs, platform roles, OAuth, signatures, identity
@@ -25,7 +26,7 @@ The worker (`src/worker.js`) claims a task and calls `processTask` in `src/servi
 
 1. Parse the trigger (`commentParser.js`) and check the org again (`whitelistService.js`).
 2. Through the platform adapter (`agent/platform.js`): get the token, add the 👀 reaction, and fetch the diff and the thread.
-3. In parallel: the repository, org membership, the provider and model (`ai/modelService.js`), repository membership, and write access (`agent/membership.js`). Write access adds the manage tools (`agent/threadActions.js`) to the read tools (`agent/repoTools.js`).
+3. In parallel: the repository, org membership, the provider and model (`ai/modelService.js`), repository membership, and write access (`agent/membership.js`). Write access adds the manage tools (`agent/threadActions.js`) to the read tools (`agent/repoTools.js`). Issues, PRs and commits the comment mentions (`agent/references.js`) add the thread-reading tools (`agent/threadReader.js`).
 4. The keys for that provider (`keyService.js`), tried in turn (`agent/keyFallback.js`).
 5. The tool loop (`agent/conversation.js`) runs as many rounds as the comment asks for (`agent/loopLimit.js`, default 3) and calls `ai/llmService.js`, which routes to the OpenRouter, OpenAI-compatible or Anthropic client.
 6. Post the answer with its footer (`agent/prompt.js`, `agent/cost.js`), or an error reply (`agentErrors.js`).

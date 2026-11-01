@@ -43,6 +43,27 @@ app.put('/gl/projects/12/merge_requests/:iid', (req, res) =>
   res.json({ iid: Number(req.params.iid), state: req.body.state_event === 'close' ? 'closed' : 'opened', web_url: 'u' })
 );
 
+// Reading: issue #3, PR #8 with two commits, and commit abc1234.
+app.get('/gh/repos/acme/web/pulls/:number', (req, res) =>
+  res.json({ number: Number(req.params.number), title: 'PR', state: 'closed', merged: true, user: { login: 'carol' }, labels: [{ name: 'ui' }], body: 'B', html_url: 'h', head: { ref: 'fix/x' }, base: { ref: 'main' }, url: 'api-url' })
+);
+app.get('/gh/repos/acme/web/pulls/8/commits', (req, res) =>
+  res.json([
+    { sha: 'a'.repeat(40), commit: { message: 'first\n\nmore', author: { name: 'Carol' } }, author: { login: 'carol' } },
+    { sha: 'b'.repeat(40), commit: { message: 'second', author: { name: 'Dave' } }, author: null },
+  ])
+);
+app.get('/gh/repos/acme/web/commits/:sha', (req, res) =>
+  res.json({ sha: req.params.sha, commit: { message: 'msg', author: { name: 'C' } }, author: { login: 'carol' }, files: [{ filename: 'x.js', status: 'modified', patch: '@@ -1 +1 @@\n-a\n+b' }, { filename: 'img.png', status: 'added' }] })
+);
+app.get('/gl/projects/12/merge_requests/:iid', (req, res) =>
+  res.json({ iid: Number(req.params.iid), title: 'MR', state: 'opened', author: { username: 'dave' }, labels: ['x'], description: 'D', web_url: 'w', source_branch: 'feat/x', target_branch: 'main' })
+);
+app.get('/gl/projects/12/issues/:iid', (req, res) => res.json({ iid: Number(req.params.iid), title: 'I', state: 'closed', author: { username: 'carol' }, labels: [], description: '', web_url: 'w' }));
+app.get('/gl/projects/12/merge_requests/9/commits', (req, res) => res.json([{ id: 'c2', title: 'newer', author_name: 'Dave' }, { id: 'c1', title: 'older', author_name: 'Carol' }]));
+app.get('/gl/projects/12/repository/commits/:sha', (req, res) => res.json({ id: req.params.sha, message: 'gl msg', author_name: 'Dave' }));
+app.get('/gl/projects/12/repository/commits/:sha/diff', (req, res) => res.json([{ old_path: 'a.js', new_path: 'a.js', diff: '@@ -1 +1 @@' }]));
+
 let server;
 let github;
 let gitlab;
@@ -130,4 +151,31 @@ test('GitLab: creates merge requests (Draft: prefix) and closes or reopens them'
   assert.deepEqual(last('PUT', '/gl/projects/12/merge_requests/4').body, { state_event: 'close' });
   assert.equal((await gitlab.setMergeRequestState(12, 4, 'open')).state, 'open');
   assert.deepEqual(last('PUT', '/gl/projects/12/merge_requests/4').body, { state_event: 'reopen' });
+});
+
+test('GitHub: reads an issue, a pull request, its commits and one commit', async () => {
+  const issue = await github.getIssue('acme/web', 3, 't');
+  assert.deepEqual([issue.isPull, issue.url], [false, 'https://github.com/acme/web/issues/3']);
+  assert.equal((await github.getIssue('acme/web', 8, 't')).isPull, true);
+  const pull = await github.getPullByNumber('acme/web', 8, 't');
+  assert.deepEqual(
+    { state: pull.state, head: pull.head, base: pull.base, labels: pull.labels, author: pull.author, apiUrl: pull.apiUrl },
+    { state: 'merged', head: 'fix/x', base: 'main', labels: ['ui'], author: 'carol', apiUrl: 'api-url' }
+  );
+  assert.deepEqual(await github.listPullCommits('acme/web', 8, 't'), [
+    { sha: 'a'.repeat(40), title: 'first', author: 'carol' },
+    { sha: 'b'.repeat(40), title: 'second', author: 'Dave' },
+  ]);
+  const commit = await github.getCommit('acme/web', 'abc1234', 't');
+  assert.equal(commit.message, 'msg');
+  assert.equal(commit.diff, 'diff --git a/x.js b/x.js\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/img.png b/img.png\n[added, no text diff]');
+});
+
+test('GitLab: reads an issue, a merge request, its commits oldest first and one commit', async () => {
+  assert.deepEqual(await gitlab.getIssue(12, 4), { number: 4, title: 'I', state: 'closed', author: 'carol', labels: [], body: '', url: 'w', isPull: false });
+  const mr = await gitlab.getMergeRequest(12, 9);
+  assert.deepEqual({ state: mr.state, head: mr.head, base: mr.base, body: mr.body }, { state: 'open', head: 'feat/x', base: 'main', body: 'D' });
+  assert.deepEqual((await gitlab.listMergeRequestCommits(12, 9)).map((c) => c.title), ['older', 'newer']);
+  const commit = await gitlab.getCommit(12, 'abc1234');
+  assert.deepEqual(commit, { sha: 'abc1234', message: 'gl msg', author: 'Dave', diff: 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@' });
 });

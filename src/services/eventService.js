@@ -70,6 +70,8 @@ function gitlabComment(event, body) {
   const base = {
     platform: 'gitlab',
     projectId: body.project.id,
+    // "group/project", to recognise links to this project in a comment.
+    repoPath: body.project.path_with_namespace || null,
     commentId: attrs.id,
     commentBody: attrs.note || '',
     author: (body.user && body.user.username) || '',

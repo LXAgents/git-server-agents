@@ -102,6 +102,27 @@ its published GLM models if its `/models` answers 404.
   - Files are cut at 40,000 characters and the list at 2,000 paths.
   - If the model doesn't support tools, the agent asks again without them. That second request
     includes the file list and any files the question names.
+- **Other issues, pull requests and commits:** only the ones **your comment mentions**, in the
+  same repository. `#12` and `GH-12` on GitHub (an issue or a PR, which share numbers), `#12`
+  for an issue and `!12` for a merge request on GitLab, a link to one in this repository, or a
+  commit sha. An issue can read a PR and a PR can read an issue:
+
+  ```
+  @lxagents is this the same bug as #12?
+  @lxagents does !9 fix this? Read its diff.
+  @lxagents what changed in each commit of this PR?
+  ```
+
+  | Tool | Reads |
+  |---|---|
+  | `read_issue` | Title, state, labels, description and the last 10 comments |
+  | `read_pull_request` | The same, plus its branches and its whole diff |
+  | `list_commits` | This PR's or MR's commits (sha, title, author), or a mentioned one's |
+  | `read_commit` | One commit's message and diff, for a sha from `list_commits` or the comment |
+
+  The tools refuse anything not mentioned, so a file or an earlier comment can't point the agent
+  at other threads. This PR's own diff is always in the prompt (up to `MAX_DIFF_CHARS`); diffs
+  read through the tools are cut at 40,000 characters and descriptions at 20,000.
 - **Keys: repository, then org, then the user's own.**
   - **Repository keys** are used only when the commenter is a collaborator on the repository
     (GitHub), a member of the project (GitLab), or a member of its org.

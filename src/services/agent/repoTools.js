@@ -1,6 +1,7 @@
 // The model's tools. Two read the repository the comment was made in, through the GitHub or
 // GitLab REST APIs (never a clone); models without tool support get that context added to the
-// prompt instead. The manage tools change issues and pull requests, and are offered only to
+// prompt instead. The read-thread tools open issues, pull requests and commits the comment
+// mentions. The manage tools change issues and pull requests, and are offered only to
 // commenters with write access (see membership.canManage and threadActions).
 const { trimTrailingSlashes } = require('../../utils/strings');
 const { platformOf } = require('./platform');
@@ -83,6 +84,32 @@ const PULL_REQUEST_TOOLS = [
 ];
 const MANAGE_TOOLS = [...ISSUE_TOOLS, ...PULL_REQUEST_TOOLS];
 
+// Read-only tools for other threads, offered only when the comment mentions one (or, for the
+// commit tools, on a pull request). See threadReader.
+const READ_THREAD_TOOLS = [
+  fn(
+    'read_issue',
+    'Read an issue the commenter mentioned (e.g. #12): title, state, description and its last comments. On GitHub a mentioned pull request number works too.',
+    { number: { type: 'integer', description: 'The mentioned issue number, e.g. 12 for #12.' } },
+    ['number']
+  ),
+  fn(
+    'read_pull_request',
+    'Read a pull request (merge request on GitLab) the commenter mentioned, or this one: title, state, branches, description, last comments and its diff.',
+    { number: { type: 'integer', description: 'The pull request number, e.g. 12 for #12 (!12 on GitLab).' } },
+    ['number']
+  ),
+  fn('list_commits', 'List the commits of this pull request (merge request on GitLab), or of one the commenter mentioned: sha, title and author, oldest first.', {
+    number: NUMBER_ARG('pull request'),
+  }),
+  fn(
+    'read_commit',
+    'Read one commit\'s message and diff. The sha must come from list_commits, or be named in the comment.',
+    { sha: { type: 'string', description: 'The commit sha, 7 to 40 hex characters.' } },
+    ['sha']
+  ),
+];
+
 // The platform's own reason for a refusal, short enough for one tool result.
 function platformMessage(data) {
   if (!data) return '';
@@ -114,8 +141,9 @@ function cleanPath(path) {
 }
 
 // `source` is { platform, repo, projectId, ref, token }. `actions` are the manage tools'
-// handlers from threadActions, or null when the commenter may only read.
-function createRepoTools(source, { actions = null } = {}) {
+// handlers from threadActions, or null when the commenter may only read. `reader` holds the
+// thread-reading handlers from threadReader that this comment allows.
+function createRepoTools(source, { actions = null, reader = null } = {}) {
   const api = platformOf(source.platform);
   let treePromise = null;
 
@@ -159,6 +187,7 @@ function createRepoTools(source, { actions = null } = {}) {
     try {
       if (name === 'list_files') return await listFiles(args.folder);
       if (name === 'read_file') return await readFile(args.path);
+      if (reader && Object.hasOwn(reader, name)) return await reader[name](args || {});
       if (actions && Object.hasOwn(actions, name)) return await actions[name](args || {});
       return `Error: unknown tool ${name}.`;
     } catch (err) {
@@ -184,7 +213,8 @@ function createRepoTools(source, { actions = null } = {}) {
     return sections.join('\n\n');
   }
 
-  const tools = actions ? [...TOOLS, ...MANAGE_TOOLS.filter((t) => Object.hasOwn(actions, t.function.name))] : TOOLS;
+  const offered = (handlers, list) => (handlers ? list.filter((t) => Object.hasOwn(handlers, t.function.name)) : []);
+  const tools = [...TOOLS, ...offered(reader, READ_THREAD_TOOLS), ...offered(actions, MANAGE_TOOLS)];
   return { tools, run, listFiles, readFile, inlineContext };
 }
 
@@ -192,4 +222,4 @@ function escapeRe(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-module.exports = { TOOLS, MANAGE_TOOLS, createRepoTools, failureText, MAX_FILE_CHARS, MAX_TREE_PATHS };
+module.exports = { TOOLS, MANAGE_TOOLS, READ_THREAD_TOOLS, createRepoTools, failureText, MAX_FILE_CHARS, MAX_TREE_PATHS };

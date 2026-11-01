@@ -372,6 +372,27 @@ test('"@lxagents close this PR" closes the pull request the comment is on', asyn
   assert.match(calls.complete[1].messages.at(-1).content, /Pull request #3 is now closed/);
 });
 
+test('a comment that mentions #12 gets the read tools, one that mentions nothing does not', async (t) => {
+  const calls = stubAll(t);
+  await processTask(githubTask('@lxagents what is this about?'));
+  assert.equal(toolNames(calls.complete[0]).includes('read_issue'), false);
+  assert.doesNotMatch(calls.complete[0].messages[0].content, /read_issue/);
+  const replies = [
+    { content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_issue', arguments: '{"number":12}' } }] },
+    { content: 'Same bug as #12.' },
+  ];
+  openRouter.complete.mock.mockImplementation(async (req) => {
+    calls.complete.push(structuredClone(req));
+    return replies.shift();
+  });
+  t.mock.method(github, 'getIssue', async (_repo, number) => ({ number, title: 'Old bug', state: 'closed', author: 'bob', labels: [], body: 'Crash', url: 'u', isPull: false }));
+  assert.equal(await processTask(githubTask('@lxagents is this the same as #12?')), 'success');
+  const asked = calls.complete.at(-2);
+  assert.ok(toolNames(asked).includes('read_issue'));
+  assert.match(asked.messages[0].content, /read_issue, read_pull_request, list_commits, read_commit read other issues/);
+  assert.match(calls.complete.at(-1).messages.at(-1).content, /^Issue #12: Old bug/);
+});
+
 test('a GitLab Developer gets the issue tools, a Reporter does not', async (t) => {
   for (const [accessLevel, manage] of [[30, true], [20, false]]) {
     const calls = stubAll(t, { accessLevel });

@@ -23,3 +23,10 @@ status: in progress
 ### Task 1 — plan/agent-read-references
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/read-references
+
+- `agent/references.js` finds `#N`, `GH-N`, `!N` (GitLab MR), links into this repository and commit shas in the commenter's own message. GitHub `#N` counts as both an issue and a PR.
+- `agent/threadReader.js`: `read_issue` (a GitHub PR number is read as a PR), `read_pull_request` (with diff), `list_commits` (this PR without a mention), `read_commit` (sha from a listing, the comment, or this PR's commits, fetched lazily). Anything not mentioned is refused with an `Error:` the model sees.
+- Platform calls: GitHub `getIssue`, `getPullByNumber`, `listPullCommits`, `getCommit`; GitLab `getIssue`, `getMergeRequest`, `listMergeRequestCommits`, `getCommit`. `toComment` now carries GitLab's `repoPath` for link matching.
+- Read tools are offered to every commenter (read-only, same repository). Tests: 197 pass on SQLite.
