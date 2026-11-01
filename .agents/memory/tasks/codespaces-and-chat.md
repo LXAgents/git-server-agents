@@ -1,7 +1,7 @@
 ---
 name: codespaces-and-chat
 description: Task record for GitHub Codespaces workspace keys and agent tools, and the 3-room real-time chat with progress and token streaming (server 1.18.0).
-status: in-progress
+status: done
 ---
 
 # Codespaces workspaces and real-time chat
@@ -16,13 +16,13 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/codespaces-and-chat` | `.agents/` | |
-| 2 | Workspace keys | Schema, fallback service, key API | git-server-agents | `feat/workspace-keys` | `prisma/`, `src/services/`, `src/controllers/`, `src/routes/`, `test/` | |
-| 3 | Codespaces service | REST calls, `gh codespace ssh`, Dockerfile | git-server-agents | `feat/codespaces` | `src/services/platforms/`, `Dockerfile`, `test/` | |
-| 4 | Workspace tools | Agent tools, timeout, error codes | git-server-agents | `feat/workspace-tools` | `src/services/agent/`, `src/services/agentErrors.js`, `test/` | |
-| 5 | Chat | SSE rooms, stored messages, chat agent | git-server-agents | `feat/chat` | `src/services/chat/`, `src/routes/chat.js`, `prisma/`, `test/` | |
-| 6 | Streaming | Token streaming, progress events | git-server-agents | `feat/agent-streaming` | `src/services/ai/`, `src/services/agent/`, `src/worker.js`, `test/` | |
-| 7 | Release | 1.18.0 changelog and version | git-server-agents | `release/1.18.0` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/codespaces-and-chat` | `.agents/` || #84 |
+| 2 | Workspace keys | Schema, fallback service, key API | git-server-agents | `feat/workspace-keys` | `prisma/`, `src/services/`, `src/controllers/`, `src/routes/`, `test/` || #85 |
+| 3 | Codespaces service | REST calls, `gh codespace ssh`, Dockerfile | git-server-agents | `feat/codespaces` | `src/services/platforms/`, `Dockerfile`, `test/` || #86 |
+| 4 | Workspace tools | Agent tools, timeout, error codes | git-server-agents | `feat/workspace-tools` | `src/services/agent/`, `src/services/agentErrors.js`, `test/` || #87 |
+| 5 | Chat | SSE rooms, stored messages, chat agent | git-server-agents | `feat/chat` | `src/services/chat/`, `src/routes/chat.js`, `prisma/`, `test/` || #88 |
+| 6 | Streaming | Token streaming, progress events | git-server-agents | `feat/agent-streaming` | `src/services/ai/`, `src/services/agent/`, `src/worker.js`, `test/` || #89 |
+| 7 | Release | 1.18.0 changelog and version | git-server-agents | `release/1.18.0` | `package.json`, `wiki/logs/` || #90 |
 
 The dashboard side (workspace keys UI, 3-pane chat page) ships as client 1.14.0 and merges after this chain.
 
@@ -67,3 +67,7 @@ This record was written before the work. Nothing else changed.
 - `agent/chatProgress.js` + `agent/index.js`: comment answers go to the commenter's user room and the repository room: progress, tokens (only while someone watches one of the rooms), and a stored `report` (answer or error reply) in the "Agent activity" session. Workspace progress goes there too. The chat agent uses the same hooks.
 - `worker.js` is unchanged: every event comes from where the work happens (the agent flow), and the worker only claims tasks.
 - Tests: `test/streaming.test.js`, chat and tool-loop hook tests.
+
+### Task 7 — release/1.18.0
+
+Version 1.18.0, the changelog at `wiki/logs/1/18/0/CHANGELOG.md` and its index row, and the PR column above. Tests: 236 pass on SQLite. Not verified from the sandbox: real Codespaces calls and `gh codespace ssh` (needs a PAT with the codespace scope), and the Docker build.

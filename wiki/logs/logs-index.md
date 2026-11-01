@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.18.0](1/18/0/CHANGELOG.md) | Codespaces workspace keys and tools, chat rooms with sessions, live progress and streamed answers | `CHANGELOG.md` |
 | [1.17.0](1/17/0/CHANGELOG.md) | The agent knows its own PR's branches and can read its own PR | `CHANGELOG.md` |
 | [1.16.0](1/16/0/CHANGELOG.md) | The agent reads mentioned issues, pull requests, their diffs and commits | `CHANGELOG.md` |
 | [1.15.0](1/15/0/CHANGELOG.md) | Tool rounds set in the comment; issue and pull request tools for commenters with write access | `CHANGELOG.md` |
