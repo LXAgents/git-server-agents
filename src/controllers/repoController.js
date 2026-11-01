@@ -6,6 +6,7 @@ const keyStore = require('../services/keyStore');
 const models = require('../services/modelService');
 const platforms = require('../services/platformService');
 const { repoView, viewInclude } = require('../services/repoStore');
+const access = require('../services/access');
 const { HttpError } = require('../errors');
 
 const lower = (s) => String(s).toLowerCase();
@@ -59,43 +60,35 @@ async function importRepo(req, res) {
   res.status(201).json(repoView(created));
 }
 
-async function requireRepoAdmin(req) {
-  const repo = await prisma.repository.findUnique({ where: { id: req.params.id } });
-  if (!repo || repo.platform !== req.user.platform) throw new HttpError(404, 'repository not found');
-  const admin = await platforms.isRepoAdmin(req.user.platform, req.user.token, req.user, repo);
-  if (!admin) throw new HttpError(403, `you do not administer ${repo.fullName}`);
-  return repo;
-}
-
 async function deleteRepo(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   await prisma.repository.delete({ where: { id: repo.id } });
   res.sendStatus(204);
 }
 
 async function listRepoKeys(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   res.json(await keyStore.listKeys({ repositoryId: repo.id }));
 }
 
 async function createRepoKey(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   res.status(201).json(await keyStore.createKey({ repositoryId: repo.id }, req.body || {}));
 }
 
 async function deleteRepoKey(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   await keyStore.deleteKey({ id: req.params.keyId, repositoryId: repo.id });
   res.sendStatus(204);
 }
 
 async function getRepoModels(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   res.json(await models.getModels({ repositoryId: repo.id }));
 }
 
 async function setRepoModel(req, res) {
-  const repo = await requireRepoAdmin(req);
+  const repo = await access.requireRepoAdmin(req.user, req.params.id);
   res.json(await models.setModel({ repositoryId: repo.id }, req.body || {}));
 }
 
@@ -109,5 +102,4 @@ module.exports = {
   deleteRepoKey,
   getRepoModels,
   setRepoModel,
-  requireRepoAdmin,
 };
