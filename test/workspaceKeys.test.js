@@ -31,7 +31,8 @@ function call(method, path, { token, platform = 'github', body } = {}) {
 async function cleanup() {
   await prisma.account.deleteMany({ where: { type: USER.type, id: USER.id } });
   await prisma.appInstallation.deleteMany({ where: { orgName: 'acme', platform: 'github' } });
-  await prisma.workspaceKey.deleteMany({ where: { accountType: 'github', accountId: { in: ['1001', '1002'] } } });
+  // Signing in creates these accounts; other suites create them again.
+  for (const [type, id] of [['github', '1001'], ['github', '1002'], ['gitlab', '7']]) await prisma.account.deleteMany({ where: { type, id } });
 }
 
 test.before(async () => {
