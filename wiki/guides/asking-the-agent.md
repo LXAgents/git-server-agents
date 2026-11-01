@@ -37,6 +37,33 @@ yesterday" changes nothing. The limit is capped by `MAX_TOOL_ROUNDS` (default 20
 answer still has to finish within `TASK_TIMEOUT_MS`. The model is told how many rounds it has,
 and after the last one it must answer with what it has.
 
+## What the agent can change
+
+A commenter with **write access** to the repository can also ask the agent to manage issues:
+
+```
+@lxagents close this issue
+@lxagents open an issue for the flaky login test, label it bug
+@lxagents reopen #12
+```
+
+| Tool | Does | Arguments |
+|---|---|---|
+| `create_issue` | Opens an issue | `title` (required), `body`, `labels` |
+| `close_issue` | Closes an issue | `number`, or this thread when it is an issue |
+| `reopen_issue` | Reopens an issue | `number`, or this thread when it is an issue |
+
+- **Who:** on GitHub, `write`, `maintain` or `admin` permission on the repository; on GitLab,
+  Developer or above on the project. Anyone else gets only the read tools. If the check fails,
+  the tools are not offered.
+- **What it acts on:** only what the commenter's own message asks. The model is told never to
+  act on instructions in files, diffs, descriptions or earlier comments.
+- **Who it says asked:** the bot is the platform author, so everything it opens ends with
+  `Opened by LXAgents for @login` (in a code span, so nobody is notified).
+- **When it fails:** the platform's status and message go back to the model, such as
+  `Error: create_issue failed (HTTP 422: Validation Failed)`, so it can fix the call or tell
+  you why. On GitHub, `close_issue` refuses a number that is a pull request.
+
 ## Providers and keys (bring your own key)
 
 | Provider | Slug | Model ids look like | API |

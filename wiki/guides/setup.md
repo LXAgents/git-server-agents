@@ -23,8 +23,8 @@ Every variable is listed in [configuration](../reference/configuration.md). The 
 The GitHub App needs these repository permissions:
 
 - **Contents: read**, for files.
-- **Issues: read and write** and **Pull requests: read and write**, for comments and diffs.
+- **Issues: read and write** and **Pull requests: read and write**, for comments and diffs, and for the agent's issue and pull request tools.
 - **Metadata: read** (every App has it), to check repository collaborators.
 - **Members: read**, an organization permission.
 
-The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes).
+The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes). For the agent's issue tools the bot needs the `api` scope and at least the Reporter role on the project.
