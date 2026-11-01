@@ -18,6 +18,7 @@ description: Index of .agents/memory/tasks — one row per task record.
 | [`tasks/agent-pickup-and-speed.md`](../memory/tasks/agent-pickup-and-speed.md) | Task record for the eyes reaction on pickup, step logs, parallel tasks and time limits (1.11.0). |
 | [`tasks/agent-read-references.md`](../memory/tasks/agent-read-references.md) | Task record for letting the agent read the issues, pull requests, PR diffs and commits a comment mentions (server 1.16.0). |
 | [`tasks/agent-pr-branch.md`](../memory/tasks/agent-pr-branch.md) | Task record for telling the agent its own pull request's branches and letting it read its own PR (server 1.17.0). |
+| [`tasks/codespaces-and-chat.md`](../memory/tasks/codespaces-and-chat.md) | Task record for GitHub Codespaces workspace keys and agent tools, and the 3-room real-time chat (server 1.18.0). |
 | [`tasks/code-structure.md`](../memory/tasks/code-structure.md) | Task record for the behaviour-neutral refactor of git-server-agents (agent split, platform adapter, access and view services, grouped service folders) in 1.13.1. |
 | [`tasks/docker.md`](../memory/tasks/docker.md) | Task record for the git-server-agents Docker image (1.2.0). |
 | [`tasks/install-warnings.md`](../memory/tasks/install-warnings.md) | Task record for clearing the npm install warnings in git-server-agents (1.1.2). |
