@@ -1,7 +1,7 @@
 ---
 name: lxagents-trigger
 description: Task record for renaming the comment trigger from the agents word to lxagents (server 1.14.0).
-status: in progress
+status: done
 ---
 
 # The trigger becomes `@lxagents`
@@ -16,9 +16,9 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/lxagents-trigger` | `.agents/` | |
-| 2 | Trigger rename | Parser, comments, tests, README | git-server-agents | `feat/lxagents-trigger` | `src/`, `test/`, `README.md`, `.env.example` | |
-| 3 | Release | 1.14.0 changelog and version | git-server-agents | `release/1.14.0` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/lxagents-trigger` | `.agents/` | #68 |
+| 2 | Trigger rename | Parser, comments, tests, README | git-server-agents | `feat/lxagents-trigger` | `src/`, `test/`, `README.md`, `.env.example` | #69 |
+| 3 | Release | 1.14.0 changelog and version | git-server-agents | `release/1.14.0` | `package.json`, `wiki/logs/` | #70 |
 
 ### Task 1 — plan/lxagents-trigger
 
@@ -29,3 +29,7 @@ This record was written before the work. Nothing else changed.
 - `commentParser.js`: `TRIGGER = '@lxagents'`, matched without regard to case. `@agents` is no longer a trigger, and a new test pins that.
 - Comments, log text, `.env.example` and the README name `@lxagents`.
 - Tests: 165 pass on SQLite.
+
+### Task 3 — release/1.14.0
+
+Version 1.14.0, the changelog at `wiki/logs/1/14/0/CHANGELOG.md` and its index row. The PR column is filled in. The dashboard half is git-client-agents 1.13.0.
