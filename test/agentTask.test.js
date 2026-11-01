@@ -308,12 +308,13 @@ test('a GitLab project member gets the repo keys', async (t) => {
 
 const toolNames = (req) => (req.tools || []).map((tool) => tool.function.name);
 
-test('a commenter with write access gets the issue tools; others only read', async (t) => {
+test('a commenter with write access gets the issue and pull request tools; others only read', async (t) => {
   for (const [permission, manage] of [['write', true], ['admin', true], ['read', false], ['none', false]]) {
     const calls = stubAll(t, { permission });
     await processTask(githubTask('@lxagents close this issue'));
     const names = toolNames(calls.complete.at(-1));
     assert.equal(names.includes('close_issue'), manage, permission);
+    assert.equal(names.includes('create_pull_request'), manage, permission);
     assert.ok(names.includes('read_file'));
     assert.equal(/close_issue/.test(calls.complete.at(-1).messages[0].content), manage);
     t.mock.restoreAll();
@@ -346,6 +347,29 @@ test('"close this issue" runs close_issue on the thread and the answer reports i
   assert.match(calls.complete[1].messages.at(-1).content, /Issue #3 is now closed/);
   assert.match(calls.complete[0].messages[0].content, /This comment is on issue #3/);
   assert.match(calls.posted[0].body, /^Closed #3\./);
+});
+
+test('"@lxagents close this PR" closes the pull request the comment is on', async (t) => {
+  const calls = stubAll(t, { permission: 'write' });
+  const task = githubTask('@lxagents close this PR');
+  const payload = JSON.parse(task.payload);
+  payload.issue.pull_request = { url: 'https://api.github.test/repos/acme/web/pulls/3' };
+  task.payload = JSON.stringify(payload);
+  t.mock.method(github, 'getPullDiff', async () => 'diff --git a/x b/x');
+  t.mock.method(github, 'getPull', async () => ({ head: { sha: 'headsha' } }));
+  t.mock.method(github, 'setPullRequestState', async (_repo, number, state) => ({ number, state, url: 'https://github.com/acme/web/pull/3' }));
+  const replies = [
+    { content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'close_pull_request', arguments: '{}' } }] },
+    { content: 'Closed the PR.' },
+  ];
+  openRouter.complete.mock.mockImplementation(async (req) => {
+    calls.complete.push(structuredClone(req));
+    return replies.shift();
+  });
+  assert.equal(await processTask(task), 'success');
+  assert.deepEqual(github.setPullRequestState.mock.calls[0].arguments.slice(0, 3), ['acme/web', 3, 'closed']);
+  assert.match(calls.complete[0].messages[0].content, /This comment is on pull request #3/);
+  assert.match(calls.complete[1].messages.at(-1).content, /Pull request #3 is now closed/);
 });
 
 test('a GitLab Developer gets the issue tools, a Reporter does not', async (t) => {

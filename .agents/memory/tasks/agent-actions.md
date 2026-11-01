@@ -41,3 +41,9 @@ This record was written before the work. Nothing else changed.
 - `membership.canManage` (fail closed): GitHub write/maintain/admin, GitLab Developer (30) or above. Only then are the tools offered and described in the tool guide, with the rule to act only on the commenter's own request.
 - Tests: `platformActions.test.js` (routes and bodies against a fake API), `agentTools.test.js`, `agentTask.test.js`. 180 pass on SQLite.
 - Task 4 builds on `threadActions.js`, `MANAGE_TOOLS` and the adapter methods.
+
+### Task 4 — feat/pull-request-tools
+
+- `githubService`: `createPullRequest`, `setPullRequestState` (`/pulls`). `gitlabService`: `createMergeRequest` (`Draft:` prefix for drafts), `setMergeRequestState` (`state_event`). The adapter maps both to `createPullRequest` / `setPullRequestState` and names them "pull request #" or "merge request !".
+- `create_pull_request` (`title`, `head` required; `base` defaults to the default branch; `body`, `draft`), `close_pull_request`, `reopen_pull_request`. Branch names are checked before any call; it never creates branches or commits.
+- Docs: the asking-the-agent table and examples; the GitLab bot needs Developer for merge requests. Tests: 186 pass on SQLite.

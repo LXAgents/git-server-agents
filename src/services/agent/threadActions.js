@@ -1,6 +1,7 @@
 // The changes the agent may make on the platform for a commenter with write access: create,
-// close and reopen issues. Each action checks its arguments and returns text for the model;
-// platform failures are thrown and turned into text by repoTools.
+// close and reopen issues and pull requests (merge requests on GitLab). Each action checks its
+// arguments and returns text for the model; platform failures are thrown and turned into text
+// by repoTools.
 const { platformOf } = require('./platform');
 
 const MAX_TITLE_CHARS = 256;
@@ -31,9 +32,28 @@ function optionalLabels(value) {
   return value.map((l) => l.trim());
 }
 
-// "12", 12 and "#12" all mean 12.
+// A branch name as git allows it, roughly: no spaces or control characters, none of ~^:?*[\,
+// no "..", "//" or "@{", and no leading "/" or trailing "/" or ".".
+const BRANCH_FORBIDDEN = new Set(['~', '^', ':', '?', '*', '[', '\\']);
+function validBranch(name) {
+  if (name.length > 255 || name.startsWith('/') || name.endsWith('/') || name.endsWith('.')) return false;
+  if (['..', '//', '@{'].some((part) => name.includes(part))) return false;
+  return ![...name].some((ch) => ch.codePointAt(0) <= 0x20 || ch.codePointAt(0) === 0x7f || BRANCH_FORBIDDEN.has(ch));
+}
+
+function branchName(value, field, fallback) {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name) {
+    if (fallback) return fallback;
+    throw new ToolInputError(`a "${field}" branch name is required`);
+  }
+  if (!validBranch(name)) throw new ToolInputError(`"${field}" is not a valid branch name`);
+  return name;
+}
+
+// "12", 12, "#12" and "!12" all mean 12.
 function parseNumber(value) {
-  const text = String(value).trim().replace(/^#/, '');
+  const text = String(value).trim().replace(/^[#!]/, '');
   return /^\d{1,9}$/.test(text) && Number(text) > 0 ? Number(text) : null;
 }
 
@@ -55,6 +75,8 @@ function attribution(body, asker) {
   return body ? `${body}\n\n${line}` : line;
 }
 
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
 // `thread` is the comment from eventService.toComment: { kind, number, repo, projectId, ... }.
 function createThreadActions({ platform, thread, token, asker }) {
   const api = platformOf(platform);
@@ -65,6 +87,12 @@ function createThreadActions({ platform, thread, token, asker }) {
     return `Issue #${issue.number} is now ${issue.state}: ${issue.url}`;
   }
 
+  async function setPull(args, state) {
+    const number = targetNumber(args.number, thread, 'pull_request', api.pullNoun);
+    const pull = await api.setPullRequestState(thread, number, state, token);
+    return `${capitalize(api.pullNoun)} ${api.pullPrefix}${pull.number} is now ${pull.state}: ${pull.url}`;
+  }
+
   return {
     async create_issue(args) {
       const fields = { title: requireTitle(args.title), body: attribution(optionalBody(args.body), asker), labels: optionalLabels(args.labels) };
@@ -73,6 +101,17 @@ function createThreadActions({ platform, thread, token, asker }) {
     },
     close_issue: (args) => setIssue(args, 'closed'),
     reopen_issue: (args) => setIssue(args, 'open'),
+    async create_pull_request(args) {
+      const head = branchName(args.head, 'head');
+      const base = branchName(args.base, 'base', thread.defaultBranch);
+      if (head === base) throw new ToolInputError('"head" and "base" must be different branches');
+      if (args.draft !== undefined && typeof args.draft !== 'boolean') throw new ToolInputError('"draft" must be true or false');
+      const fields = { title: requireTitle(args.title), body: attribution(optionalBody(args.body), asker), head, base, draft: args.draft === true };
+      const pull = await api.createPullRequest(thread, fields, token);
+      return `Created ${api.pullNoun} ${api.pullPrefix}${pull.number} (${head} into ${base}): ${pull.url}`;
+    },
+    close_pull_request: (args) => setPull(args, 'closed'),
+    reopen_pull_request: (args) => setPull(args, 'open'),
   };
 }
 

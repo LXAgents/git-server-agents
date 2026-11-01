@@ -153,14 +153,25 @@ test('loop limits are read from plain words, default to 3 and are capped', () =>
 const { createThreadActions } = require('../src/services/agent/threadActions');
 const gitlab = require('../src/services/platforms/gitlabService');
 
-const issueThread = { kind: 'issue', number: 3, repo: 'acme/web', projectId: 12 };
+const issueThread = { kind: 'issue', number: 3, repo: 'acme/web', projectId: 12, defaultBranch: 'main' };
+const pullThread = { kind: 'pull_request', number: 8, repo: 'acme/web', projectId: 12, defaultBranch: 'main' };
 const manageRepo = (platform = 'github', thread = issueThread) =>
   createRepoTools({ platform, repo: 'acme/web', projectId: 12, ref: 'abc123', token: 't' }, { actions: createThreadActions({ platform, thread, token: 't', asker: 'alice' }) });
 
-test('the issue tools are only offered with actions, with clear schemas', () => {
+test('the issue and pull request tools are only offered with actions, with clear schemas', () => {
   assert.deepEqual(repoFor().tools.map((tool) => tool.function.name), ['list_files', 'read_file']);
   const tools = manageRepo().tools;
-  assert.deepEqual(tools.map((tool) => tool.function.name), ['list_files', 'read_file', 'create_issue', 'close_issue', 'reopen_issue']);
+  assert.deepEqual(tools.map((tool) => tool.function.name), [
+    'list_files',
+    'read_file',
+    'create_issue',
+    'close_issue',
+    'reopen_issue',
+    'create_pull_request',
+    'close_pull_request',
+    'reopen_pull_request',
+  ]);
+  assert.deepEqual(tools.find((tool) => tool.function.name === 'create_pull_request').function.parameters.required, ['title', 'head']);
   const create = tools.find((tool) => tool.function.name === 'create_issue').function;
   assert.deepEqual(create.parameters.required, ['title']);
   assert.ok(create.parameters.properties.body);
@@ -209,4 +220,48 @@ test('bad arguments and platform refusals come back to the model as errors', asy
   assert.equal(await repo.run('close_issue', '{"number":8}'), 'Error: close_issue: #8 is a pull request, not an issue.');
   assert.match(await repo.run('close_issue', '{"number":4}'), /HTTP 403: Resource not accessible by integration\)\. The app may lack the permission/);
   assert.match(await repoFor().run('close_issue', '{}'), /unknown tool close_issue/);
+});
+
+test('create, close and reopen pull requests on GitHub, defaulting to this thread and the default branch', async (t) => {
+  t.mock.method(github, 'createPullRequest', async () => ({ number: 21, url: 'https://gh/acme/web/pull/21', state: 'open' }));
+  t.mock.method(github, 'setPullRequestState', async (_repo, number, state) => ({ number, state, url: `https://gh/acme/web/pull/${number}` }));
+  const repo = manageRepo('github', pullThread);
+  assert.equal(await repo.run('create_pull_request', '{"title":"Fix login","head":"fix/login","body":"Fixes #3"}'), 'Created pull request #21 (fix/login into main): https://gh/acme/web/pull/21');
+  const [repoName, fields] = github.createPullRequest.mock.calls[0].arguments;
+  assert.equal(repoName, 'acme/web');
+  assert.deepEqual({ ...fields, body: undefined }, { title: 'Fix login', head: 'fix/login', base: 'main', draft: false, body: undefined });
+  assert.match(fields.body, /^Fixes #3\n\n<sub>Opened by LXAgents for `@alice`<\/sub>$/);
+  assert.equal(await repo.run('close_pull_request', '{}'), 'Pull request #8 is now closed: https://gh/acme/web/pull/8');
+  assert.equal(await repo.run('reopen_pull_request', '{"number":"#9"}'), 'Pull request #9 is now open: https://gh/acme/web/pull/9');
+  assert.deepEqual(github.setPullRequestState.mock.calls.map((c) => c.arguments.slice(0, 3)), [['acme/web', 8, 'closed'], ['acme/web', 9, 'open']]);
+});
+
+test('GitLab pull request tools are merge requests', async (t) => {
+  t.mock.method(gitlab, 'createMergeRequest', async () => ({ number: 4, url: 'https://gl/grp/app/-/merge_requests/4', state: 'open' }));
+  t.mock.method(gitlab, 'setMergeRequestState', async (_p, number, state) => ({ number, state, url: 'u' }));
+  const repo = manageRepo('gitlab', pullThread);
+  assert.equal(await repo.run('create_pull_request', '{"title":"T","head":"feat/x","base":"develop","draft":true}'), 'Created merge request !4 (feat/x into develop): https://gl/grp/app/-/merge_requests/4');
+  assert.equal(gitlab.createMergeRequest.mock.calls[0].arguments[0], 12);
+  assert.equal(gitlab.createMergeRequest.mock.calls[0].arguments[1].draft, true);
+  assert.equal(await repo.run('close_pull_request', '{"number":"!6"}'), 'Merge request !6 is now closed: u');
+  assert.deepEqual(gitlab.setMergeRequestState.mock.calls[0].arguments, [12, 6, 'closed']);
+});
+
+test('pull request tools check branches and send refusals back to the model', async (t) => {
+  t.mock.method(github, 'createPullRequest', async () => {
+    throw httpError(422, { message: 'Validation Failed', errors: [{ message: 'No commits between main and fix/login' }] });
+  });
+  t.mock.method(github, 'setPullRequestState', async () => {
+    throw httpError(422, { message: 'state cannot be changed. The pull request was merged.' });
+  });
+  const repo = manageRepo('github', issueThread);
+  assert.equal(await repo.run('create_pull_request', '{"title":"T"}'), 'Error: create_pull_request: a "head" branch name is required.');
+  for (const head of ['bad branch', '../x', 'a..b', 'x/', 'x.', 'a~b', '/x']) {
+    assert.match(await repo.run('create_pull_request', JSON.stringify({ title: 'T', head })), /"head" is not a valid branch name/, head);
+  }
+  assert.match(await repo.run('create_pull_request', '{"title":"T","head":"main"}'), /must be different branches/);
+  assert.match(await repo.run('create_pull_request', '{"title":"T","head":"x","draft":"yes"}'), /"draft" must be true or false/);
+  assert.equal(await repo.run('create_pull_request', '{"title":"T","head":"fix/login"}'), 'Error: create_pull_request failed (HTTP 422: Validation Failed; No commits between main and fix/login).');
+  assert.equal(await repo.run('close_pull_request', '{}'), 'Error: close_pull_request: this comment is not on a pull request, so give the pull request "number".');
+  assert.match(await repo.run('reopen_pull_request', '{"number":8}'), /HTTP 422: state cannot be changed\. The pull request was merged\./);
 });

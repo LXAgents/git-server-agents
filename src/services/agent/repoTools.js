@@ -60,7 +60,28 @@ const ISSUE_TOOLS = [
   fn('close_issue', 'Close an issue. Use it only when the commenter asks for the issue to be closed.', { number: NUMBER_ARG('issue') }),
   fn('reopen_issue', 'Reopen a closed issue. Use it only when the commenter asks for the issue to be reopened.', { number: NUMBER_ARG('issue') }),
 ];
-const MANAGE_TOOLS = [...ISSUE_TOOLS];
+// GitLab calls them merge requests; the adapter maps these to its merge request endpoints.
+const PULL_REQUEST_TOOLS = [
+  fn(
+    'create_pull_request',
+    'Open a pull request (a merge request on GitLab) from an existing branch. It does not create branches or commits. Use it only when the commenter asks for one.',
+    {
+      title: { type: 'string', description: 'The pull request title, one line.' },
+      head: { type: 'string', description: 'An existing branch in this repository with the changes, e.g. "fix/login".' },
+      base: { type: 'string', description: 'The branch to merge into. Omit it for the default branch.' },
+      body: { type: 'string', description: 'The pull request description in Markdown.' },
+      draft: { type: 'boolean', description: 'Open it as a draft. Default false.' },
+    },
+    ['title', 'head']
+  ),
+  fn('close_pull_request', 'Close a pull request (merge request on GitLab) without merging it. Use it only when the commenter asks.', {
+    number: NUMBER_ARG('pull request'),
+  }),
+  fn('reopen_pull_request', 'Reopen a closed, unmerged pull request (merge request on GitLab). Use it only when the commenter asks.', {
+    number: NUMBER_ARG('pull request'),
+  }),
+];
+const MANAGE_TOOLS = [...ISSUE_TOOLS, ...PULL_REQUEST_TOOLS];
 
 // The platform's own reason for a refusal, short enough for one tool result.
 function platformMessage(data) {
