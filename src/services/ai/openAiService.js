@@ -3,6 +3,7 @@
 // Returns the assistant message ({ content, tool_calls?, cost }) like openRouterService.
 const axios = require('axios');
 const config = require('../../config');
+const { streamCompletion } = require('./chatStream');
 
 // Every failure is tagged source "provider" with the provider's name, so agentErrors can tell
 // it from a platform error and name the provider in the reply.
@@ -27,9 +28,31 @@ function toWire(m) {
   return out;
 }
 
-async function complete({ baseUrl, apiKey, model, messages, tools, timeout = config.ai.modelTimeoutMs, providerName = 'OpenAI' }) {
+// With onToken the reply is streamed and every piece of text is passed to it as it arrives.
+async function complete({ baseUrl, apiKey, model, messages, tools, timeout = config.ai.modelTimeoutMs, providerName = 'OpenAI', onToken }) {
   const body = { model, messages: messages.map(toWire) };
   if (tools && tools.length) body.tools = tools;
+  if (onToken) {
+    let reply;
+    try {
+      reply = await streamCompletion({
+        url: `${baseUrl.replace(/\/$/, '')}/chat/completions`,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body,
+        timeout,
+        onToken,
+        bodyError: (status, error) => {
+          const err = new Error(`${providerName} error: ${error.message || 'unknown'}`);
+          err.response = { status, data: { error }, headers: {} };
+          return err;
+        },
+      });
+    } catch (err) {
+      throw tag(err, providerName);
+    }
+    if (!reply.content && !reply.tool_calls) throw emptyError(model);
+    return { content: reply.content, tool_calls: reply.tool_calls, cost: null };
+  }
   let data;
   try {
     ({ data } = await axios.post(`${baseUrl.replace(/\/$/, '')}/chat/completions`, body, {

@@ -89,14 +89,22 @@ function fromAnthropic(reply) {
   return { content: text, tool_calls: toolCalls.length ? toolCalls : undefined, cost: null, providerContent: blocks };
 }
 
-async function complete({ baseUrl, apiKey, model, messages, tools, timeout = config.ai.modelTimeoutMs }) {
+// Sends the request; with onToken it is streamed and every text delta is passed on as it arrives.
+async function send(api, body, onToken) {
+  if (!onToken) return api.messages.create(body);
+  const stream = api.messages.stream(body);
+  stream.on('text', (delta) => onToken(delta));
+  return stream.finalMessage();
+}
+
+async function complete({ baseUrl, apiKey, model, messages, tools, timeout = config.ai.modelTimeoutMs, onToken }) {
   const { system, messages: turns } = toAnthropic(messages);
   const body = { model, max_tokens: config.ai.maxOutputTokens, messages: turns };
   if (system) body.system = system;
   if (tools && tools.length) body.tools = toAnthropicTools(tools);
   let reply;
   try {
-    reply = await client(baseUrl, apiKey, timeout).messages.create(body);
+    reply = await send(client(baseUrl, apiKey, timeout), body, onToken);
   } catch (err) {
     throw tag(err);
   }
