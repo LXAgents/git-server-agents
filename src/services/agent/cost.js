@@ -12,6 +12,14 @@ function addCost(spend, cost) {
   else spend.complete = false;
 }
 
+// "0.000120" -> "0.00012", "1.000000" -> "1". Done by hand to keep it linear.
+function trimZeros(text) {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '0') end -= 1;
+  if (text[end - 1] === '.') end -= 1;
+  return text.slice(0, end);
+}
+
 // In US dollars: "0 USD" for free models, otherwise up to six decimals without trailing
 // zeros, e.g. "0.000123 USD". Below a millionth it shows "< 0.000001 USD".
 function formatCost(spend) {
@@ -19,7 +27,7 @@ function formatCost(spend) {
   let amount;
   if (spend.cost === 0) amount = '0 USD';
   else if (spend.cost < 0.000001) amount = '< 0.000001 USD';
-  else amount = `${spend.cost.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')} USD`;
+  else amount = `${trimZeros(spend.cost.toFixed(6))} USD`;
   return spend.complete ? amount : `≥ ${amount}`;
 }
 

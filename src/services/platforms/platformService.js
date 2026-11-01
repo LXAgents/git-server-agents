@@ -163,14 +163,20 @@ async function isRepoAdmin(platform, token, user, repo) {
   }
 }
 
+// GitHub logins and org names: letters, digits and single hyphens, at most 39 characters.
+const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+
 // GitHub only: the App installation on an org or user account, or null if not installed.
 async function findGithubInstallation(name, kind) {
+  if (!GITHUB_LOGIN.test(String(name))) return null;
+  const api = axios.create({
+    baseURL: config.github.apiUrl,
+    headers: { Authorization: `Bearer ${github.appJwt()}`, Accept: 'application/vnd.github+json' },
+    timeout: 15_000,
+  });
   const path = kind === 'user' ? `/users/${encodeURIComponent(name)}/installation` : `/orgs/${encodeURIComponent(name)}/installation`;
   try {
-    const { data } = await axios.get(`${config.github.apiUrl}${path}`, {
-      headers: { Authorization: `Bearer ${github.appJwt()}`, Accept: 'application/vnd.github+json' },
-      timeout: 15_000,
-    });
+    const { data } = await api.get(path);
     return String(data.id);
   } catch (err) {
     if (status(err) === 404) return null;
