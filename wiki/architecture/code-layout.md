@@ -12,7 +12,7 @@ src/middleware/  owner and platform-token sign-in, CORS
 src/services/    org check, task, comment parser, agent errors, key, key store, repository,
                  access checks, shared views, logs and crypto services
   agent/         the agent: flow (index.js), prompt, tool loop and its round limit, key fallback, cost,
-                 membership, repository tools, issue actions, and the GitHub/GitLab adapter
+                 membership, repository tools, issue and pull request actions, and the GitHub/GitLab adapter
   ai/            providers, llmService and the OpenRouter, OpenAI and Anthropic clients,
                  model settings and live model lists
   platforms/     GitHub and GitLab APIs, platform roles, OAuth, signatures, identity

@@ -27,4 +27,4 @@ The GitHub App needs these repository permissions:
 - **Metadata: read** (every App has it), to check repository collaborators.
 - **Members: read**, an organization permission.
 
-The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes). For the agent's issue tools the bot needs the `api` scope and at least the Reporter role on the project.
+The GitLab bot token needs the `api` scope (or `read_api` plus permission to post notes). For the agent's issue and merge request tools the bot needs the `api` scope and at least the Developer role on the project.
