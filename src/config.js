@@ -64,6 +64,8 @@ module.exports = {
     // One model call, and one whole answer (every call, tool and key together).
     modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS) || 60_000,
     taskTimeoutMs: Number(process.env.TASK_TIMEOUT_MS) || 240_000,
+    // The most tool rounds a comment may ask for ("run this 5 times"); 3 when it names none.
+    maxToolRounds: Math.max(1, Number(process.env.MAX_TOOL_ROUNDS) || 20),
   },
   worker: {
     inline: process.env.WORKER_INLINE !== 'false',

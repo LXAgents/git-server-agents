@@ -3,11 +3,10 @@
 const config = require('../../config');
 const llm = require('../ai/llmService');
 const { TOOLS } = require('./repoTools');
+const { DEFAULT_TOOL_ROUNDS } = require('./loopLimit');
 const { addCost } = require('./cost');
 const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
-
-const MAX_TOOL_ROUNDS = 3;
 
 // OpenRouter answers 404 "No endpoints found that support tool use", and other providers a 400
 // naming tools, when the chosen model cannot call tools.
@@ -52,12 +51,16 @@ function contentOf(reply, model) {
   return reply.content;
 }
 
-// Up to MAX_TOOL_ROUNDS rounds of list_files / read_file, then the model must answer.
-async function toolLoop(call, messages, repo, model) {
-  for (let round = 0; round <= MAX_TOOL_ROUNDS; round += 1) {
-    const last = round === MAX_TOOL_ROUNDS;
-    if (last) messages.push({ role: 'user', content: 'Answer now with what you have; do not call any more tools.' });
-    const reply = await call(messages, TOOLS);
+const ANSWER_NOW = 'Answer now with what you have; do not call any more tools.';
+
+// Up to `maxRounds` rounds of tool calls, then the model must answer. `repo.tools` are the
+// tools this commenter may use; repo.run runs one and returns its text, errors included.
+async function toolLoop(call, messages, repo, model, maxRounds) {
+  const tools = repo.tools || TOOLS;
+  for (let round = 0; round <= maxRounds; round += 1) {
+    const last = round === maxRounds;
+    if (last) messages.push({ role: 'user', content: ANSWER_NOW });
+    const reply = await call(messages, tools);
     const toolCalls = reply.tool_calls || [];
     if (toolCalls.length === 0 || last) return contentOf(reply, model);
     // providerContent is the provider's own reply (Anthropic's content blocks), sent back
@@ -73,15 +76,15 @@ async function toolLoop(call, messages, repo, model) {
   throw new Error('unreachable');
 }
 
-// The model may call the repository tools; models without tool support get one plain request
-// with the file list and named files inlined instead.
-async function converse({ request, apiKey, system, history, question, repo }) {
+// The model may call the repository tools, described to it by `toolGuide`; models without
+// tool support get one plain request with the file list and named files inlined instead.
+async function converse({ request, apiKey, system, toolGuide = '', history, question, repo, maxRounds = DEFAULT_TOOL_ROUNDS }) {
   const call = (messages, tools) => timedCall(request, apiKey, messages, tools);
   const ask = (systemText) => [{ role: 'system', content: systemText }, ...history, { role: 'user', content: question }];
 
   if (!repo) return contentOf(await call(ask(system)), request.model);
   try {
-    return await toolLoop(call, ask(system), repo, request.model);
+    return await toolLoop(call, ask(toolGuide ? `${system}\n\n${toolGuide}` : system), repo, request.model, maxRounds);
   } catch (err) {
     if (!toolsUnsupported(err)) throw err;
     log.warn('agent', `${logSafe(request.model)} does not support tools; adding repository context to the prompt instead`, request.logMeta);
@@ -90,4 +93,4 @@ async function converse({ request, apiKey, system, history, question, repo }) {
   }
 }
 
-module.exports = { converse, timedCall, toolsUnsupported, MAX_TOOL_ROUNDS };
+module.exports = { converse, timedCall, toolsUnsupported, ANSWER_NOW };

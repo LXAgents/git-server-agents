@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildHistory, buildSystemPrompt } = require('../src/services/agentService');
+const { buildHistory, buildSystemPrompt, buildToolGuide } = require('../src/services/agentService');
 const { REPLY_MARKER } = require('../src/services/eventService');
 
 const reply = (text, model = 'openrouter/free') => `${text}\n\n<sub>Model: \`${model}\`</sub>\n${REPLY_MARKER}`;
@@ -32,11 +32,15 @@ test('drops the oldest messages once the history is too long, and skips empty on
   assert.deepEqual(history.map((m) => m.content), [`@c: ${'y'.repeat(50)}`]);
 });
 
-test('the system prompt handles an issue with no diff and mentions the tools', () => {
-  const prompt = buildSystemPrompt({ platform: 'gitlab', kind: 'issue', title: 'Bug', description: '' }, '', { tools: true });
+test('the system prompt handles an issue with no diff, and the tools are only in the tool guide', () => {
+  const prompt = buildSystemPrompt({ platform: 'gitlab', kind: 'issue', title: 'Bug', description: '' }, '');
   assert.match(prompt, /gitlab issue/);
-  assert.match(prompt, /list_files/);
+  assert.doesNotMatch(prompt, /list_files/);
   assert.doesNotMatch(prompt, /Diff:/);
+  const guide = buildToolGuide({ rounds: 5 });
+  assert.match(guide, /list_files/);
+  assert.match(guide, /you have 5 rounds for this answer/);
+  assert.match(buildToolGuide({ rounds: 1 }), /you have 1 round for/);
   const mr = buildSystemPrompt({ platform: 'gitlab', kind: 'pull_request', title: 'MR' }, 'diff --git a b');
   assert.match(mr, /merge request/);
   assert.match(mr, /```diff/);
