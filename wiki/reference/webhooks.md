@@ -25,7 +25,8 @@
 
 The answer is posted back as a reply, with a footer naming the model and its provider, what the
 answer cost in US dollars (every OpenRouter call it took, added up; `0 USD` for free models;
-`unknown` for the other providers, which report no cost), and the
+`unknown` for the other providers, which report no cost), the tool rounds the answer was
+allowed (`Loop`, see [tool rounds](../guides/asking-the-agent.md#how-many-tool-rounds)), and the
 commenter who asked (their username, as `@name` in a code span, so nobody is notified).
 
 Every reply ends with the hidden marker `<!-- LXAgents -->` (error replies also carry

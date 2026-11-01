@@ -9,8 +9,8 @@ Anthropic, DeepSeek or z.ai), together with:
 - the earlier conversation,
 - any repository files the model asks for.
 
-The answer is posted back as a reply, with a footer naming the model, the provider, the cost and
-who asked.
+The answer is posted back as a reply, with a footer naming the model, the provider, the cost, the
+loop limit and who asked.
 Each user, org and repository brings its own provider keys, and the server holds none.
 
 ## Quick start
