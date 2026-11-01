@@ -29,3 +29,10 @@ The dashboard side (workspace keys UI, 3-pane chat page) ships as client 1.14.0 
 ### Task 1 — plan/codespaces-and-chat
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/workspace-keys
+
+- `WorkspaceKey` in both schemas (relations cascade like `AccountKey`; needs `npm run db:push`).
+- `services/workspaceKeyService.js`: `getWorkspaceKeys(provider, account, installation, repository)` returns key handles repo → org → user, each by priority; `reveal()` re-reads the row and decrypts at the moment of use, and refuses a key switched off since. No key → `NoWorkspaceKeyError` (401, code `NO_WORKSPACE_KEY`). `findWorkspaceKeys` returns `[]` instead.
+- `services/workspaceKeyStore.js` + `controllers/workspaceKeyController.js`: `/api/user/workspace-keys`, `/orgs/:id/workspace-keys` (owner), `/repos/:id/workspace-keys` (admin). GitHub owners only. `keyStore` now exports `ownerView`.
+- Tests: `test/workspaceKeys.test.js`.

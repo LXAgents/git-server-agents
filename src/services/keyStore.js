@@ -66,4 +66,4 @@ async function deleteKey(where) {
   if (count === 0) throw new HttpError(404, 'key not found');
 }
 
-module.exports = { listKeys, createKey, deleteKey };
+module.exports = { listKeys, createKey, deleteKey, ownerView };
