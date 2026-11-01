@@ -12,6 +12,10 @@ const CODESPACE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 // Git refuses these in branch names; refusing them here keeps odd input out of the API path.
 const BAD_BRANCH = /(^[-/.])|\.\.|[\s~^:?*[\\]|@\{|\/$|\.lock$|\.$/;
 
+function isValidBranch(branch) {
+  return typeof branch === 'string' && branch.length > 0 && branch.length <= 200 && !BAD_BRANCH.test(branch);
+}
+
 // A Codespaces failure: `source` lets agentErrors tell it from the AI provider and the platform.
 // `code` is WORKSPACE_ERROR (GitHub refused or failed) or WORKSPACE_UNAVAILABLE (gh missing,
 // codespace never became available).
@@ -58,7 +62,7 @@ function view(data) {
 // POST /repos/{owner}/{repo}/codespaces. `branch` may be left out for the default branch.
 async function createCodespace(repoFullName, branch, token, { idleTimeoutMinutes = config.workspace.idleTimeoutMinutes } = {}) {
   if (typeof repoFullName !== 'string' || !REPO_NAME.test(repoFullName)) throw new CodespacesError('repository must be "owner/name"', { code: 'BAD_INPUT' });
-  if (branch !== undefined && branch !== null && (typeof branch !== 'string' || !branch || BAD_BRANCH.test(branch))) {
+  if (branch !== undefined && branch !== null && !isValidBranch(branch)) {
     throw new CodespacesError(`"${branch}" is not a valid branch name`, { code: 'BAD_INPUT' });
   }
   const [owner, repo] = repoFullName.split('/');
@@ -145,4 +149,4 @@ function executeCommand(codespaceName, command, token, { timeoutMs = config.work
   });
 }
 
-module.exports = { createCodespace, getCodespaceStatus, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv };
+module.exports = { createCodespace, getCodespaceStatus, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv, isValidBranch };
