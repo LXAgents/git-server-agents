@@ -13,7 +13,8 @@ function providerFor(slug = 'openrouter') {
   return provider;
 }
 
-// `request` is { provider, baseUrl, apiKey, model, messages, tools?, timeout? }. The clients
+// `request` is { provider, baseUrl, apiKey, model, messages, tools?, timeout?, onToken? }; with
+// onToken the reply is streamed and each piece of text is passed to it as it arrives. The clients
 // are looked up on their modules at call time, so tests can mock them.
 async function complete({ provider: slug, ...request }) {
   const provider = providerFor(slug);

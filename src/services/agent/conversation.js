@@ -27,15 +27,60 @@ function deadlineError(limitMs) {
   return err;
 }
 
-// One model call, cut short by the answer's deadline, and logged with its duration.
+// Listeners (the chat) must never break an answer.
+function safely(fn) {
+  try {
+    fn();
+  } catch {
+    // Ignored on purpose.
+  }
+}
+
+// What the chat shows while a tool runs.
+const TOOL_STATUS = {
+  list_files: 'Listing the repository files...',
+  read_file: (a) => `Reading ${a.path || 'a file'}...`,
+  read_issue: (a) => `Reading issue ${a.number || ''}...`,
+  read_pull_request: (a) => `Reading pull request ${a.number || ''}...`,
+  list_commits: 'Listing commits...',
+  read_commit: (a) => `Reading commit ${String(a.sha || '').slice(0, 7)}...`,
+  create_issue: 'Opening an issue...',
+  close_issue: 'Closing an issue...',
+  reopen_issue: 'Reopening an issue...',
+  create_pull_request: 'Opening a pull request...',
+  close_pull_request: 'Closing a pull request...',
+  reopen_pull_request: 'Reopening a pull request...',
+  create_workspace: 'Creating GitHub Codespace...',
+  exec_command: (a) => `Running: ${String(a.command || '').slice(0, 120)}`,
+  commit_workspace: (a) => `Committing and pushing to ${a.branchName || 'a branch'}...`,
+  delete_workspace: 'Deleting the workspace...',
+};
+
+function toolStatus(name, rawArgs) {
+  const entry = TOOL_STATUS[name];
+  if (!entry) return `Running ${name}...`;
+  if (typeof entry === 'string') return entry;
+  let args = {};
+  try {
+    args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || '{}') : rawArgs || {};
+  } catch {
+    args = {};
+  }
+  return entry(args || {});
+}
+
+// One model call, cut short by the answer's deadline, and logged with its duration. With
+// request.onToken the reply is streamed; request.onRound hears the start of every call.
 async function timedCall(request, apiKey, messages, tools) {
   const { deadline, limitMs, label = '', logMeta } = request;
   const remaining = deadline ? deadline - Date.now() : config.ai.modelTimeoutMs;
   if (remaining <= 0) throw deadlineError(limitMs);
   const started = Date.now();
-  const { deadline: _d, limitMs: _l, label: _n, logMeta: _m, spend, ...body } = request;
+  const { deadline: _d, limitMs: _l, label: _n, logMeta: _m, spend, onToken, onTool: _t, onRound, ...body } = request;
+  if (onRound) safely(() => onRound());
   try {
-    const reply = await llm.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
+    const stream = onToken ? { onToken: (text) => safely(() => onToken(text)) } : {};
+    const reply = await llm.complete({ ...body, ...stream, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
     if (spend) addCost(spend, reply.cost);
     log.info('agent', `${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`, logMeta);
     return reply;
@@ -55,7 +100,8 @@ const ANSWER_NOW = 'Answer now with what you have; do not call any more tools.';
 
 // Up to `maxRounds` rounds of tool calls, then the model must answer. `repo.tools` are the
 // tools this commenter may use; repo.run runs one and returns its text, errors included.
-async function toolLoop(call, messages, repo, model, maxRounds) {
+// `onTool({ tool, status })` hears each tool call before it runs, for the chat.
+async function toolLoop(call, messages, repo, model, maxRounds, onTool) {
   const tools = repo.tools || TOOLS;
   for (let round = 0; round <= maxRounds; round += 1) {
     const last = round === maxRounds;
@@ -70,6 +116,7 @@ async function toolLoop(call, messages, repo, model, maxRounds) {
     messages.push(turn);
     for (const toolCall of toolCalls) {
       const fn = toolCall.function || {};
+      if (onTool) safely(() => onTool({ tool: fn.name, status: toolStatus(fn.name, fn.arguments) }));
       messages.push({ role: 'tool', tool_call_id: toolCall.id, content: await repo.run(fn.name, fn.arguments) });
     }
   }
@@ -84,7 +131,7 @@ async function converse({ request, apiKey, system, toolGuide = '', history, ques
 
   if (!repo) return contentOf(await call(ask(system)), request.model);
   try {
-    return await toolLoop(call, ask(toolGuide ? `${system}\n\n${toolGuide}` : system), repo, request.model, maxRounds);
+    return await toolLoop(call, ask(toolGuide ? `${system}\n\n${toolGuide}` : system), repo, request.model, maxRounds, request.onTool);
   } catch (err) {
     if (!toolsUnsupported(err)) throw err;
     log.warn('agent', `${logSafe(request.model)} does not support tools; adding repository context to the prompt instead`, request.logMeta);
@@ -93,4 +140,4 @@ async function converse({ request, apiKey, system, toolGuide = '', history, ques
   }
 }
 
-module.exports = { converse, timedCall, toolsUnsupported, ANSWER_NOW };
+module.exports = { converse, timedCall, toolsUnsupported, toolStatus, ANSWER_NOW };

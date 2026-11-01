@@ -125,9 +125,12 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
       label: `chat ${room.room}: `,
       logMeta,
       spend: newSpend(),
+      onToken: (text) => send.live({ type: 'token', sender: AGENT, content: text }),
+      onTool: ({ tool, status }) => send.live({ type: 'progress', sender: AGENT, content: status, data: { status, tool } }),
+      // Each model call starts a new piece of text: the client clears what it streamed so far.
+      onRound: () => send.live({ type: 'progress', sender: AGENT, content: 'Thinking...', data: { status: 'Thinking...', model: choice.model, reset: true } }),
     };
     const history = toHistory(await store.history(sessionId, room.room), question.id);
-    send.live({ type: 'progress', sender: AGENT, content: 'Thinking...', data: { status: 'Thinking...', model: choice.model } });
     const text = await chatWithFallback(
       choice.candidates,
       (key) =>

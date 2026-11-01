@@ -30,6 +30,7 @@ The worker (`src/worker.js`) claims a task and calls `processTask` in `src/servi
 3. In parallel: the repository, org membership, the provider and model (`ai/modelService.js`), repository membership, and write access (`agent/membership.js`). Write access adds the manage tools (`agent/threadActions.js`) to the read tools (`agent/repoTools.js`). Issues, PRs and commits the comment mentions (`agent/references.js`) add the thread-reading tools (`agent/threadReader.js`). On GitHub, write access plus a workspace key the commenter may use (`workspaceKeyService.js`) adds the workspace tools (`agent/workspaceTools.js`, `platforms/githubCodespacesService.js`), whose codespaces are deleted when the answer ends.
 4. The keys for that provider (`keyService.js`), tried in turn (`agent/keyFallback.js`).
 5. The tool loop (`agent/conversation.js`) runs as many rounds as the comment asks for (`agent/loopLimit.js`, default 3) and calls `ai/llmService.js`, which routes to the OpenRouter, OpenAI-compatible or Anthropic client.
-6. Post the answer with its footer (`agent/prompt.js`, `agent/cost.js`), or an error reply (`agentErrors.js`).
+6. While it runs, `agent/chatProgress.js` sends progress, streamed text and a final report to the commenter's user room and the repository's chat room (`services/chat/`). Text is streamed (`ai/chatStream.js`, the Anthropic SDK stream) only while someone has one of those rooms open.
+7. Post the answer with its footer (`agent/prompt.js`, `agent/cost.js`), or an error reply (`agentErrors.js`).
 
 GitHub and GitLab differences live only in `agent/platform.js` and `platforms/`. A new platform call goes into the adapter, never into an `if (platform === 'github')` branch.

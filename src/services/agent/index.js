@@ -17,6 +17,7 @@ const { createThreadActions } = require('./threadActions');
 const { createThreadReader } = require('./threadReader');
 const { createWorkspaceTools } = require('./workspaceTools');
 const { findWorkspaceKeys, DEFAULT_WORKSPACE_PROVIDER } = require('../workspaceKeyService');
+const { chatFor } = require('./chatProgress');
 const { findReferences } = require('./references');
 const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require('./prompt');
 const { parseLoopLimit } = require('./loopLimit');
@@ -47,7 +48,9 @@ async function replyWithError(task, comment, ctx, err) {
       if (!ctx.installationId) return;
       token = await api.token(ctx.installationId);
     }
-    const body = `${formatReply(err, { model: ctx.model, taskId: task.id })}\n${REPLY_MARKER}\n${ERROR_MARKER}`;
+    const text = formatReply(err, { model: ctx.model, taskId: task.id });
+    if (ctx.chat) await ctx.chat.report(text, { error: true, model: ctx.model });
+    const body = `${text}\n${REPLY_MARKER}\n${ERROR_MARKER}`;
     await api.postReply(comment, body, token);
   } catch (postErr) {
     log.error('agent', `task ${task.id}: could not post the error reply: ${logSafe(postErr.message)}`, taskMeta(task));
@@ -101,7 +104,7 @@ async function chooseModelAndKeys(task, payload, comment, parsed, identity, acce
 // The workspace tools, when this commenter may have them: GitHub only, write access only, and
 // a workspace key they may use (repository keys for its members, org keys for org members, then
 // their own). Anything that cannot be confirmed means no workspace tools (fail closed).
-async function workspaceFor(task, comment, access, choice, manage, head) {
+async function workspaceFor(task, comment, access, choice, manage, head, ctx) {
   if (!platformOf(task.platform).workspaces || !manage || !comment.repo) return null;
   try {
     const keys = await findWorkspaceKeys(
@@ -111,7 +114,14 @@ async function workspaceFor(task, comment, access, choice, manage, head) {
       choice.repoMember ? choice.repository : null
     );
     if (keys.length === 0) return null;
-    return createWorkspaceTools({ repo: comment.repo, defaultBranch: comment.defaultBranch, branch: head || null, keys, logMeta: taskMeta(task) });
+    return createWorkspaceTools({
+      repo: comment.repo,
+      defaultBranch: comment.defaultBranch,
+      branch: head || null,
+      keys,
+      logMeta: taskMeta(task),
+      onProgress: (step) => ctx.chat && ctx.chat.progress(step),
+    });
   } catch (err) {
     log.warn('agent', `task ${task.id}: no workspace tools: ${logSafe(err.message)}`, taskMeta(task));
     return null;
@@ -136,14 +146,16 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   ]);
   const { model, providerInfo, baseUrl, candidates } = choice;
   ctx.model = model;
+  const asker = comment.author || identity.triggerUser || 'unknown';
+  // The commenter's user room and the repository's room (when imported) see the answer live.
+  ctx.chat = chatFor({ task, comment, identity, repository: choice.repository, asker, where: `${api.repoPath(comment)}${comment.kind === 'pull_request' ? api.pullPrefix : '#'}${comment.number}` });
 
   const { ref, head, base } = await api.resolveSource(comment, token);
-  const asker = comment.author || identity.triggerUser || 'unknown';
   const actions = manage ? createThreadActions({ platform: task.platform, thread: comment, token, asker }) : null;
   // Other threads are read only when the commenter's own message mentions them.
   const refs = findReferences(parsed.prompt, { platform: task.platform, repoPath: api.repoPath(comment) });
   const reader = createThreadReader({ platform: task.platform, thread: comment, token, refs });
-  const workspace = ref ? await workspaceFor(task, comment, access, choice, manage, head) : null;
+  const workspace = ref ? await workspaceFor(task, comment, access, choice, manage, head, ctx) : null;
   const repo = ref
     ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions, reader, workspace: workspace && workspace.handlers })
     : null;
@@ -158,6 +170,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     label: `task ${task.id}: `,
     logMeta: taskMeta(task),
     spend: newSpend(),
+    ...ctx.chat.hooks(),
   };
   const { rounds } = parseLoopLimit(parsed.prompt);
   log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)${actions ? ', with the manage tools' : ''}${workspace ? ', with the workspace tools' : ''}`, request.logMeta);
@@ -191,6 +204,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     asker,
   });
   await api.postReply(comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
+  await ctx.chat.report(answer, { model, provider: providerInfo.name, cost: formatCost(request.spend), loop: rounds });
   return 'success';
 }
 

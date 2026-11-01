@@ -275,3 +275,17 @@ test('a create that already succeeded in this answer is not made twice', async (
   await repo.run('create_issue', '{"title":"Other"}');
   assert.equal(github.createIssue.mock.callCount(), 2);
 });
+
+test('the tool loop tells listeners about each round and tool, and streams with onToken', async (t) => {
+  stubGithub(t);
+  const events = [];
+  const replies = [{ content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'read_file', arguments: '{"path":"src/app.js"}' } }] }, { content: 'Done.' }];
+  t.mock.method(openRouter, 'complete', async ({ onToken }) => {
+    if (onToken) onToken('Do');
+    return replies.shift();
+  });
+  const request = { ...base.request, onRound: () => events.push('round'), onTool: (s) => events.push(s.status), onToken: (x) => events.push(`token:${x}`) };
+  const answer = await converse({ ...base, request, question: 'q', repo: repoFor() });
+  assert.equal(answer, 'Done.');
+  assert.deepEqual(events, ['round', 'token:Do', 'Reading src/app.js...', 'round', 'token:Do']);
+});

@@ -59,3 +59,11 @@ This record was written before the work. Nothing else changed.
 - `/api/chat` routes (rooms, sessions, messages, stream); PATCH added to CORS methods. The stream re-checks access every 5 minutes.
 - Mock platform repos now carry `pull`/`push` and `default_branch`.
 - Tests: `test/chat.test.js`. Docs: `wiki/guides/chat.md` (indexed), API reference, code layout.
+
+### Task 6 — feat/agent-streaming
+
+- `ai/chatStream.js`: streamed Chat Completions (SSE) for OpenRouter and the OpenAI-compatible clients; text goes to `onToken`, tool-call pieces are joined by index, OpenRouter's cost comes from the last chunk's usage, errors inside the stream and streamed error bodies keep their status and message, and the whole stream is bound by the call's timeout. Anthropic uses the SDK's `messages.stream`. Without `onToken` nothing changes.
+- `agent/conversation.js`: `request.onToken`, `request.onRound` (each model call; the chat clears streamed text) and `request.onTool({ tool, status })` before each tool runs, all wrapped so a listener can't break an answer.
+- `agent/chatProgress.js` + `agent/index.js`: comment answers go to the commenter's user room and the repository room: progress, tokens (only while someone watches one of the rooms), and a stored `report` (answer or error reply) in the "Agent activity" session. Workspace progress goes there too. The chat agent uses the same hooks.
+- `worker.js` is unchanged: every event comes from where the work happens (the agent flow), and the worker only claims tasks.
+- Tests: `test/streaming.test.js`, chat and tool-loop hook tests.

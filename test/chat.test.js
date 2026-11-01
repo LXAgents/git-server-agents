@@ -152,6 +152,11 @@ test('the stream carries the room\'s events and the agent answers in the persona
   const types = events.map((e) => `${e.type}:${e.sender.type}`);
   assert.equal(types[0], 'message:user');
   assert.ok(types.includes('progress:agent'));
+  // The answer streams in pieces before the stored message arrives.
+  const tokens = events.filter((e) => e.type === 'token').map((e) => e.content);
+  assert.ok(tokens.length > 1);
+  assert.equal(tokens.join(''), 'openai says hi to gpt-chat');
+  assert.equal(chatRequests.at(-1).body.stream, true);
   const answer = events.find((e) => e.type === 'message' && e.sender.type === 'agent');
   assert.equal(answer.content, 'openai says hi to gpt-chat');
   assert.equal(answer.sessionId, posted.sessionId);
@@ -178,4 +183,42 @@ test('without a key the agent answers with the error code', async () => {
 test('user room keys name the platform, so equal ids on GitHub and GitLab never share a room', () => {
   const { userRoomKey } = require('../src/services/chat/rooms');
   assert.notEqual(userRoomKey('github', '7'), userRoomKey('gitlab', '7'));
+});
+
+test('a comment answer shows progress, tokens only when watched, and a stored report', async () => {
+  const bus = require('../src/services/chat/bus');
+  const { chatFor } = require('../src/services/agent/chatProgress');
+  const args = {
+    task: { id: 'task-1', platform: 'github' },
+    comment: { kind: 'issue', number: 12 },
+    identity: { triggerUserId: '1001' },
+    repository: repo,
+    asker: 'alice',
+    where: 'acme/web#12',
+  };
+  // Nobody watching: no token hook, so the provider is asked exactly as before.
+  assert.equal(chatFor(args).hooks().onToken, undefined);
+
+  const seen = [];
+  const off = bus.subscribe(`repo:${repo.id}`, (e) => seen.push(e));
+  const chat = chatFor(args);
+  const hooks = chat.hooks();
+  hooks.onRound();
+  hooks.onToken('Hel');
+  hooks.onTool({ tool: 'create_workspace', status: 'Creating GitHub Codespace...' });
+  await chat.report('Done: tests pass.', { model: 'm' });
+  off();
+  assert.deepEqual(
+    seen.map((e) => e.type),
+    ['progress', 'progress', 'token', 'progress', 'report']
+  );
+  assert.equal(seen[0].content, 'Answering @alice on acme/web#12');
+  assert.deepEqual(seen[3].data.tool, 'create_workspace');
+  assert.equal(seen[4].room, `repo:${repo.id}`);
+  // Reports go to each room's "Agent activity" session.
+  const sessions = await (await call('GET', `/sessions?room=repo:${repo.id}`)).json();
+  const activity = sessions.find((s) => s.title === 'Agent activity');
+  const history = await (await call('GET', `/messages?room=repo:${repo.id}&sessionId=${activity.id}`)).json();
+  assert.deepEqual(history.map((m) => [m.type, m.content]), [['report', 'Done: tests pass.']]);
+  assert.equal(seen[4].sessionId, activity.id);
 });
