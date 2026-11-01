@@ -46,4 +46,5 @@ This record was written before the work. Nothing else changed.
 
 - `githubService`: `createPullRequest`, `setPullRequestState` (`/pulls`). `gitlabService`: `createMergeRequest` (`Draft:` prefix for drafts), `setMergeRequestState` (`state_event`). The adapter maps both to `createPullRequest` / `setPullRequestState` and names them "pull request #" or "merge request !".
 - `create_pull_request` (`title`, `head` required; `base` defaults to the default branch; `body`, `draft`), `close_pull_request`, `reopen_pull_request`. Branch names are checked before any call; it never creates branches or commits.
-- Docs: the asking-the-agent table and examples; the GitLab bot needs Developer for merge requests. Tests: 186 pass on SQLite.
+- A create that already succeeded in this answer is not repeated (a key fallback reruns the tool loop, and models repeat themselves); the second call returns the first result.
+- Docs: the asking-the-agent table and examples; the GitLab bot needs Developer for merge requests. Tests: 187 pass on SQLite.

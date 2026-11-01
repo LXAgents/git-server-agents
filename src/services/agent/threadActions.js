@@ -93,15 +93,26 @@ function createThreadActions({ platform, thread, token, asker }) {
     return `${capitalize(api.pullNoun)} ${api.pullPrefix}${pull.number} is now ${pull.state}: ${pull.url}`;
   }
 
+  // One answer may try several keys, each running the tool loop again, and a model may repeat
+  // itself. A create that already succeeded in this answer is not made twice.
+  const created = new Map();
+  const once = (name, create) => async (args) => {
+    const key = `${name}:${JSON.stringify(args)}`;
+    if (created.has(key)) return `${created.get(key)} (already done earlier in this answer; not created again)`;
+    const result = await create(args);
+    created.set(key, result);
+    return result;
+  };
+
   return {
-    async create_issue(args) {
+    create_issue: once('create_issue', async (args) => {
       const fields = { title: requireTitle(args.title), body: attribution(optionalBody(args.body), asker), labels: optionalLabels(args.labels) };
       const issue = await api.createIssue(thread, fields, token);
       return `Created issue #${issue.number}: ${issue.url}`;
-    },
+    }),
     close_issue: (args) => setIssue(args, 'closed'),
     reopen_issue: (args) => setIssue(args, 'open'),
-    async create_pull_request(args) {
+    create_pull_request: once('create_pull_request', async (args) => {
       const head = branchName(args.head, 'head');
       const base = branchName(args.base, 'base', thread.defaultBranch);
       if (head === base) throw new ToolInputError('"head" and "base" must be different branches');
@@ -109,7 +120,7 @@ function createThreadActions({ platform, thread, token, asker }) {
       const fields = { title: requireTitle(args.title), body: attribution(optionalBody(args.body), asker), head, base, draft: args.draft === true };
       const pull = await api.createPullRequest(thread, fields, token);
       return `Created ${api.pullNoun} ${api.pullPrefix}${pull.number} (${head} into ${base}): ${pull.url}`;
-    },
+    }),
     close_pull_request: (args) => setPull(args, 'closed'),
     reopen_pull_request: (args) => setPull(args, 'open'),
   };

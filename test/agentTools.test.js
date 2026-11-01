@@ -265,3 +265,13 @@ test('pull request tools check branches and send refusals back to the model', as
   assert.equal(await repo.run('close_pull_request', '{}'), 'Error: close_pull_request: this comment is not on a pull request, so give the pull request "number".');
   assert.match(await repo.run('reopen_pull_request', '{"number":8}'), /HTTP 422: state cannot be changed\. The pull request was merged\./);
 });
+
+test('a create that already succeeded in this answer is not made twice', async (t) => {
+  t.mock.method(github, 'createIssue', async () => ({ number: 9, url: 'https://gh/acme/web/issues/9', state: 'open' }));
+  const repo = manageRepo();
+  assert.equal(await repo.run('create_issue', '{"title":"T"}'), 'Created issue #9: https://gh/acme/web/issues/9');
+  assert.match(await repo.run('create_issue', '{"title":"T"}'), /^Created issue #9: .* \(already done earlier in this answer; not created again\)$/);
+  assert.equal(github.createIssue.mock.callCount(), 1);
+  await repo.run('create_issue', '{"title":"Other"}');
+  assert.equal(github.createIssue.mock.callCount(), 2);
+});
