@@ -17,6 +17,8 @@ const adapters = {
     identity: githubIdentity,
     // GitHub calls are made with the App installation's token; GitLab uses the bot token.
     needsToken: true,
+    // GitHub Codespaces back the workspace tools; GitLab has no equivalent.
+    workspaces: true,
     token: (installationId) => github.installationToken(installationId),
     acknowledge: (c, token) => github.addReaction(c.repo, c.commentId, { review: Boolean(c.review) }, token),
     diff: (c, token) => (c.pullUrl ? github.getPullDiff(c.pullUrl, token) : ''),
@@ -66,6 +68,7 @@ const adapters = {
     name: 'GitLab',
     identity: gitlabIdentity,
     needsToken: false,
+    workspaces: false,
     token: async () => undefined,
     acknowledge: (c) => gitlab.awardEmoji(c.projectId, c.kind, c.number, c.commentId),
     diff: (c) => (c.kind === 'pull_request' ? gitlab.getMergeRequestDiff(c.projectId, c.number) : ''),

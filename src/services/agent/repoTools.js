@@ -6,6 +6,7 @@
 const { trimTrailingSlashes } = require('../../utils/strings');
 const { platformOf } = require('./platform');
 const { ToolInputError } = require('./threadActions');
+const { WORKSPACE_TOOLS } = require('./workspaceTools');
 
 const MAX_FILE_CHARS = 40_000;
 const MAX_TREE_PATHS = 2_000;
@@ -141,8 +142,9 @@ function cleanPath(path) {
 
 // `source` is { platform, repo, projectId, ref, token }. `actions` are the manage tools'
 // handlers from threadActions, or null when the commenter may only read. `reader` holds the
-// thread-reading handlers from threadReader that this comment allows.
-function createRepoTools(source, { actions = null, reader = null } = {}) {
+// thread-reading handlers from threadReader that this comment allows. `workspace` holds the
+// workspace tools' handlers (workspaceTools), or null when they are not offered.
+function createRepoTools(source, { actions = null, reader = null, workspace = null } = {}) {
   const api = platformOf(source.platform);
   let treePromise = null;
 
@@ -188,6 +190,7 @@ function createRepoTools(source, { actions = null, reader = null } = {}) {
       if (name === 'read_file') return await readFile(args.path);
       if (reader && Object.hasOwn(reader, name)) return await reader[name](args || {});
       if (actions && Object.hasOwn(actions, name)) return await actions[name](args || {});
+      if (workspace && Object.hasOwn(workspace, name)) return await workspace[name](args || {});
       return `Error: unknown tool ${name}.`;
     } catch (err) {
       return failureText(name, err);
@@ -213,7 +216,7 @@ function createRepoTools(source, { actions = null, reader = null } = {}) {
   }
 
   const offered = (handlers, list) => (handlers ? list.filter((t) => Object.hasOwn(handlers, t.function.name)) : []);
-  const tools = [...TOOLS, ...offered(reader, READ_THREAD_TOOLS), ...offered(actions, MANAGE_TOOLS)];
+  const tools = [...TOOLS, ...offered(reader, READ_THREAD_TOOLS), ...offered(actions, MANAGE_TOOLS), ...offered(workspace, WORKSPACE_TOOLS)];
   return { tools, run, listFiles, readFile, inlineContext };
 }
 

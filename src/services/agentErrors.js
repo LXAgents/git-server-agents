@@ -24,6 +24,9 @@ const CODES = {
   PROVIDER_ERROR: { title: 'The model provider failed', retry: 'Retry in a few minutes. If it keeps failing, pick another model.' },
   EMPTY_RESPONSE: { title: 'The model gave an empty answer', retry: 'Retry once, or pick another model.' },
   PLATFORM_ERROR: { title: 'GitHub or GitLab refused a request', retry: 'Retry in a few minutes. If it keeps failing, the app may be missing a permission.' },
+  NO_WORKSPACE_KEY: { title: 'No Codespaces token to use', retry: 'Retrying will not help. Add a GitHub personal access token with the codespace scope on the dashboard’s API keys page.' },
+  WORKSPACE_ERROR: { title: 'GitHub Codespaces refused a request', retry: 'Check that Codespaces is enabled for the repository and that the token has the codespace scope, then retry.' },
+  WORKSPACE_UNAVAILABLE: { title: 'The workspace is not available', retry: 'Retry in a few minutes. If it keeps failing, the server may be missing the gh CLI.' },
   INTERNAL_ERROR: { title: 'The server hit an unexpected error', retry: 'Retry once. If it fails again, give the owner the task id below.' },
 };
 
@@ -111,6 +114,11 @@ function classifyProvider(e, now) {
 function classify(err, now = Date.now()) {
   const e = err || {};
   if (e instanceof AgentError) return result(e.code, null, e.message);
+  if (e.code === 'NO_WORKSPACE_KEY') return result('NO_WORKSPACE_KEY', e.status || null, e.message);
+  if (e.source === 'codespaces') {
+    const code = CODES[e.code] ? e.code : 'WORKSPACE_ERROR';
+    return result(code, (e.response && e.response.status) || null, quote(e.message), { quoted: true });
+  }
   if (e.source === 'openrouter' || e.source === 'provider') return classifyProvider(e, now);
   if (e.source === 'empty') return result('EMPTY_RESPONSE', null, 'The model returned no text.');
   const response = e.response;
