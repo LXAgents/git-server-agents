@@ -50,6 +50,15 @@ const adapters = {
     pullPrefix: '#',
     createPullRequest: (c, fields, token) => github.createPullRequest(c.repo, fields, token),
     setPullRequestState: (c, number, state, token) => github.setPullRequestState(c.repo, number, state, token),
+    repoPath: (c) => c.repo,
+    readIssue: (c, number, token) => github.getIssue(c.repo, number, token),
+    async readPullRequest(c, number, token) {
+      const pull = await github.getPullByNumber(c.repo, number, token);
+      return { ...pull, diff: await github.getPullDiff(pull.apiUrl, token) };
+    },
+    comments: (c, number, token) => github.listIssueComments(c.repo, number, token, { limit: 10, maxPages: 3 }),
+    listPullCommits: (c, number, token) => github.listPullCommits(c.repo, number, token),
+    readCommit: (c, sha, token) => github.getCommit(c.repo, sha, token),
   },
   gitlab: {
     name: 'GitLab',
@@ -77,6 +86,16 @@ const adapters = {
     pullPrefix: '!',
     createPullRequest: (c, fields) => gitlab.createMergeRequest(c.projectId, fields),
     setPullRequestState: (c, number, state) => gitlab.setMergeRequestState(c.projectId, number, state),
+    repoPath: (c) => c.repoPath,
+    readIssue: (c, number) => gitlab.getIssue(c.projectId, number),
+    async readPullRequest(c, number) {
+      const [mr, diff] = await Promise.all([gitlab.getMergeRequest(c.projectId, number), gitlab.getMergeRequestDiff(c.projectId, number)]);
+      return { ...mr, diff };
+    },
+    // kind is "issue" or "pull_request", as on the comment.
+    comments: (c, number, _token, kind) => gitlab.listNotes(c.projectId, kind, number, { limit: 10 }),
+    listPullCommits: (c, number) => gitlab.listMergeRequestCommits(c.projectId, number),
+    readCommit: (c, sha) => gitlab.getCommit(c.projectId, sha),
   },
 };
 

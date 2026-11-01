@@ -14,6 +14,8 @@ const { createRepoTools } = require('./repoTools');
 const { platformOf } = require('./platform');
 const { isOrgMember, isRepoMember, canManage } = require('./membership');
 const { createThreadActions } = require('./threadActions');
+const { createThreadReader } = require('./threadReader');
+const { findReferences } = require('./references');
 const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require('./prompt');
 const { parseLoopLimit } = require('./loopLimit');
 const { chatWithFallback } = require('./keyFallback');
@@ -116,7 +118,10 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   const ref = await api.resolveRef(comment, token);
   const asker = comment.author || identity.triggerUser || 'unknown';
   const actions = manage ? createThreadActions({ platform: task.platform, thread: comment, token, asker }) : null;
-  const repo = ref ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions }) : null;
+  // Other threads are read only when the commenter's own message mentions them.
+  const refs = findReferences(parsed.prompt, { platform: task.platform, repoPath: api.repoPath(comment) });
+  const reader = createThreadReader({ platform: task.platform, thread: comment, token, refs });
+  const repo = ref ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions, reader }) : null;
   const request = {
     provider: providerInfo.slug,
     baseUrl,
@@ -136,7 +141,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
         request,
         apiKey: key.apiKey,
         system: buildSystemPrompt(comment, diff),
-        toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment }),
+        toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader) }),
         maxRounds: rounds,
         history: buildHistory(thread, comment.commentId),
         question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
