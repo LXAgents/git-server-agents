@@ -165,12 +165,66 @@ async function setMergeRequestState(projectId, iid, state) {
   return issueOf(data);
 }
 
+const stateOf = (state) => (state === 'opened' ? 'open' : state);
+
+async function getIssue(projectId, iid) {
+  const { data } = await client().get(`${project(projectId)}/issues/${iid}`);
+  return {
+    number: data.iid,
+    title: data.title || '',
+    state: stateOf(data.state),
+    author: (data.author && data.author.username) || '',
+    labels: data.labels || [],
+    body: data.description || '',
+    url: data.web_url,
+    isPull: false,
+  };
+}
+
+async function getMergeRequest(projectId, iid) {
+  const { data } = await client().get(`${project(projectId)}/merge_requests/${iid}`);
+  return {
+    number: data.iid,
+    title: data.title || '',
+    state: stateOf(data.state),
+    author: (data.author && data.author.username) || '',
+    labels: data.labels || [],
+    body: data.description || '',
+    url: data.web_url,
+    head: data.source_branch || '',
+    base: data.target_branch || '',
+  };
+}
+
+// A merge request's commits, oldest first (GitLab lists them newest first).
+async function listMergeRequestCommits(projectId, iid, { maxPages = 3 } = {}) {
+  const commits = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data } = await client().get(`${project(projectId)}/merge_requests/${iid}/commits`, { params: { per_page: 100, page } });
+    commits.push(...data);
+    if (data.length < 100) break;
+  }
+  return commits.reverse().map((c) => ({ sha: c.id, title: c.title || '', author: c.author_name || '' }));
+}
+
+async function getCommit(projectId, sha) {
+  const api = client();
+  const base = `${project(projectId)}/repository/commits/${encodeURIComponent(sha)}`;
+  const [{ data }, { data: files }] = await Promise.all([api.get(base), api.get(`${base}/diff`, { params: { per_page: 100 } })]);
+  const diff = files.map((f) => `diff --git a/${f.old_path} b/${f.new_path}\n--- a/${f.old_path}\n+++ b/${f.new_path}\n${f.diff}`).join('\n');
+  return { sha: data.id, message: data.message || data.title || '', author: data.author_name || '', diff };
+}
+
 module.exports = {
   getMemberAccessLevel,
   createIssue,
   setIssueState,
   createMergeRequest,
   setMergeRequestState,
+  getIssue,
+  getMergeRequest,
+  listMergeRequestCommits,
+  getCommit,
   awardEmoji,
   isProjectMember,
   getMergeRequestDiff,

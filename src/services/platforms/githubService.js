@@ -181,6 +181,66 @@ async function setPullRequestState(repo, number, state, token) {
   return { number: data.number, url: data.html_url, state: data.merged ? 'merged' : data.state };
 }
 
+// One issue by number. A pull request is an issue too on GitHub; `pull_request` tells them apart.
+async function getIssue(repo, number, token) {
+  const { data } = await axios.get(`${repoUrl(repo)}/issues/${number}`, { headers: headers(token) });
+  return {
+    number: data.number,
+    title: data.title || '',
+    state: data.state,
+    author: (data.user && data.user.login) || '',
+    labels: (data.labels || []).map((l) => (typeof l === 'string' ? l : l.name)),
+    body: data.body || '',
+    url: data.html_url,
+    isPull: Boolean(data.pull_request),
+  };
+}
+
+async function getPullByNumber(repo, number, token) {
+  const { data } = await axios.get(`${repoUrl(repo)}/pulls/${number}`, { headers: headers(token) });
+  return {
+    number: data.number,
+    title: data.title || '',
+    state: data.merged ? 'merged' : data.state,
+    author: (data.user && data.user.login) || '',
+    labels: (data.labels || []).map((l) => l.name),
+    body: data.body || '',
+    url: data.html_url,
+    head: (data.head && data.head.ref) || '',
+    base: (data.base && data.base.ref) || '',
+    apiUrl: data.url,
+  };
+}
+
+// A pull request's commits, oldest first (GitHub returns at most 250).
+async function listPullCommits(repo, number, token, { maxPages = 3 } = {}) {
+  const commits = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data } = await axios.get(`${repoUrl(repo)}/pulls/${number}/commits`, { headers: headers(token), params: { per_page: 100, page } });
+    commits.push(...data);
+    if (data.length < 100) break;
+  }
+  return commits.map((c) => ({
+    sha: c.sha,
+    title: String((c.commit && c.commit.message) || '').split('\n')[0],
+    author: (c.author && c.author.login) || (c.commit && c.commit.author && c.commit.author.name) || '',
+  }));
+}
+
+// One commit's message and diff, rebuilt from its per-file patches.
+async function getCommit(repo, sha, token) {
+  const { data } = await axios.get(`${repoUrl(repo)}/commits/${encodeURIComponent(sha)}`, { headers: headers(token) });
+  const diff = (data.files || [])
+    .map((f) => `diff --git a/${f.previous_filename || f.filename} b/${f.filename}\n${f.patch || `[${f.status}, no text diff]`}`)
+    .join('\n');
+  return {
+    sha: data.sha,
+    message: (data.commit && data.commit.message) || '',
+    author: (data.author && data.author.login) || (data.commit && data.commit.author && data.commit.author.name) || '',
+    diff,
+  };
+}
+
 module.exports = {
   isCollaborator,
   appJwt,
@@ -198,4 +258,8 @@ module.exports = {
   setIssueState,
   createPullRequest,
   setPullRequestState,
+  getIssue,
+  getPullByNumber,
+  listPullCommits,
+  getCommit,
 };
