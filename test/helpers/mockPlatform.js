@@ -34,6 +34,14 @@ const openRouterModels = [
   { id: 'google/imagen', name: 'Imagen', pricing: { prompt: '0.1', completion: '0' }, architecture: { input_modalities: ['text'], output_modalities: ['image'] } },
 ];
 
+// Other providers' /models answers, and every chat request the mock answered.
+const openAiModels = [{ id: 'gpt-5', owned_by: 'openai' }, { id: 'text-embedding-3-small', owned_by: 'openai' }, { id: 'gpt-5-mini', owned_by: 'openai' }];
+const anthropicModels = [
+  { type: 'model', id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', created_at: '2026-09-01T00:00:00Z', max_input_tokens: 1000000 },
+  { type: 'model', id: 'claude-haiku-5-5', display_name: 'Claude Haiku 5.5', created_at: '2026-09-01T00:00:00Z' },
+];
+const chatRequests = [];
+
 const gitlabUsers = { 'gl-carol': { id: 7, username: 'carol', name: 'Carol', avatar_url: 'https://gitlab.example/7.png' }, 'gl-dave': { id: 8, username: 'dave' } };
 // How many public profile lookups each platform answered, so tests can see the cache work.
 const profileLookups = { github: 0, gitlab: 0 };
@@ -137,6 +145,40 @@ function createMockPlatform() {
   });
 
   app.get('/or/models', (_req, res) => res.json({ data: openRouterModels }));
+
+  // OpenAI-compatible providers list models only to a key holder.
+  const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer /, '');
+  app.get('/oa/models', (req, res) => {
+    if (bearer(req) !== 'sk-openai-good') return res.status(401).json({ error: { message: 'Incorrect API key provided' } });
+    return res.json({ object: 'list', data: openAiModels });
+  });
+  app.post('/oa/chat/completions', express.json(), (req, res) => {
+    if (bearer(req) !== 'sk-openai-good') return res.status(401).json({ error: { message: 'Incorrect API key provided' } });
+    chatRequests.push({ provider: 'openai', body: req.body });
+    return res.json({ choices: [{ message: { role: 'assistant', content: `openai says hi to ${req.body.model}` } }] });
+  });
+  app.get('/ds/models', (req, res) => res.json({ data: bearer(req) ? [{ id: 'deepseek-reasoner' }, { id: 'deepseek-chat' }] : [] }));
+  app.get('/zai/models', (_req, res) => res.status(404).json({ error: { message: 'not found' } }));
+
+  // Anthropic's Messages API (/v1 is added by the SDK, which sends the key as a bearer token).
+  const anthropicKey = (req) => req.headers['x-api-key'] || bearer(req);
+  app.get('/an/v1/models', (req, res) => {
+    if (anthropicKey(req) !== 'sk-ant-good') return res.status(401).json({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
+    return res.json({ data: anthropicModels, has_more: false, first_id: anthropicModels[0].id, last_id: anthropicModels.at(-1).id });
+  });
+  app.post('/an/v1/messages', express.json(), (req, res) => {
+    if (anthropicKey(req) !== 'sk-ant-good') return res.status(401).json({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
+    chatRequests.push({ provider: 'anthropic', body: req.body });
+    return res.json({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: req.body.model,
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: `anthropic says hi to ${req.body.model}` }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+  });
   app.use('/gh', gh);
   app.use('/gl', gl);
   return app;
@@ -150,6 +192,10 @@ async function startMockPlatform() {
   const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
   process.env.GITHUB_API_URL = `${base}/gh`;
   process.env.OPENROUTER_API_URL = `${base}/or`;
+  process.env.OPENAI_API_URL = `${base}/oa`;
+  process.env.ANTHROPIC_API_URL = `${base}/an`;
+  process.env.DEEPSEEK_API_URL = `${base}/ds`;
+  process.env.ZAI_API_URL = `${base}/zai`;
   process.env.GITLAB_API_URL = `${base}/gl`;
   process.env.GITHUB_URL = `${base}/ghweb`;
   process.env.GITLAB_URL = `${base}/glweb`;
@@ -161,4 +207,4 @@ async function startMockPlatform() {
   return server;
 }
 
-module.exports = { startMockPlatform, profileLookups };
+module.exports = { startMockPlatform, profileLookups, chatRequests };

@@ -1,5 +1,5 @@
 // Every outgoing HTTP call times out, so one stuck GitHub or GitLab request can't hold the
-// worker forever. OpenRouter calls set their own, longer, timeout (see openRouterService).
+// worker forever. AI provider calls set their own, longer, timeout (see llmService).
 const axios = require('axios');
 
 const PLATFORM_TIMEOUT_MS = Number(process.env.PLATFORM_TIMEOUT_MS) || 30_000;
