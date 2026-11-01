@@ -33,3 +33,11 @@ This record was written before the work. Nothing else changed.
 - `prompt.js`: `buildSystemPrompt(comment, diff)` no longer describes tools. `buildToolGuide({ rounds })` does, and only the tool path adds it, so the no-tools fallback stops claiming tools.
 - owen asked (2026-11-01) for a `Loop:` footer line: it shows the rounds the answer was allowed, between Cost and User, and `stripReply` drops it from history.
 - Docs: the asking-the-agent guide, configuration, code layout, webhooks, README, `.env.example`. Tests: 168 pass on SQLite.
+
+### Task 3 — feat/issue-tools
+
+- `githubService`: `getCollaboratorPermission`, `createIssue`, `setIssueState` (refuses a number that is a PR, since GitHub's issues endpoint would close it). `gitlabService`: `getMemberAccessLevel` (now behind `isProjectMember`), `createIssue`, `setIssueState` (`state_event`, "opened" reported as "open").
+- `agent/threadActions.js` (new) validates arguments and defaults `number` to this thread. `repoTools.js` holds the `create_issue`, `close_issue`, `reopen_issue` schemas and turns failures into `Error: …` text with the platform's status and message.
+- `membership.canManage` (fail closed): GitHub write/maintain/admin, GitLab Developer (30) or above. Only then are the tools offered and described in the tool guide, with the rule to act only on the commenter's own request.
+- Tests: `platformActions.test.js` (routes and bodies against a fake API), `agentTools.test.js`, `agentTask.test.js`. 180 pass on SQLite.
+- Task 4 builds on `threadActions.js`, `MANAGE_TOOLS` and the adapter methods.

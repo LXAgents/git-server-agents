@@ -28,7 +28,7 @@ function githubTask(body, { org = true } = {}) {
   return { id: 't1', platform: 'github', event: 'issue_comment', payload: JSON.stringify(payload) };
 }
 
-function stubAll(t, { member = true, history = [], repository = null, collaborator = false, stored = 'openrouter/free', storedProvider = 'openrouter' } = {}) {
+function stubAll(t, { member = true, history = [], repository = null, collaborator = false, permission = 'read', accessLevel = 0, stored = 'openrouter/free', storedProvider = 'openrouter' } = {}) {
   const calls = { keys: [], posted: [], members: [], complete: [], reactions: [] };
   t.mock.method(github, 'addReaction', async (repo, id, opts) => calls.reactions.push({ repo, id, ...opts }));
   t.mock.method(gitlab, 'awardEmoji', async (projectId, kind, iid, noteId) => calls.reactions.push({ projectId, kind, iid, noteId }));
@@ -36,6 +36,8 @@ function stubAll(t, { member = true, history = [], repository = null, collaborat
   t.mock.method(repoStore, 'findForEvent', async () => repository);
   t.mock.method(models, 'resolveModel', async () => ({ provider: storedProvider, model: stored, source: 'user' }));
   t.mock.method(github, 'isCollaborator', async () => collaborator);
+  t.mock.method(github, 'getCollaboratorPermission', async () => permission);
+  t.mock.method(gitlab, 'getMemberAccessLevel', async () => accessLevel);
   t.mock.method(whitelist, 'verify', async () => ({ allowed: true, installation, account: {} }));
   t.mock.method(github, 'installationToken', async () => 'inst-token');
   t.mock.method(github, 'listIssueComments', async () => history);
@@ -302,6 +304,70 @@ test('a GitLab project member gets the repo keys', async (t) => {
   assert.deepEqual(gitlab.isProjectMember.mock.calls[0].arguments, [12, '8']);
   assert.equal(calls.keys[0].repo, repository);
   assert.equal(calls.keys[0].inst, null);
+});
+
+const toolNames = (req) => (req.tools || []).map((tool) => tool.function.name);
+
+test('a commenter with write access gets the issue tools; others only read', async (t) => {
+  for (const [permission, manage] of [['write', true], ['admin', true], ['read', false], ['none', false]]) {
+    const calls = stubAll(t, { permission });
+    await processTask(githubTask('@lxagents close this issue'));
+    const names = toolNames(calls.complete.at(-1));
+    assert.equal(names.includes('close_issue'), manage, permission);
+    assert.ok(names.includes('read_file'));
+    assert.equal(/close_issue/.test(calls.complete.at(-1).messages[0].content), manage);
+    t.mock.restoreAll();
+  }
+});
+
+test('a failed write-access check offers no issue tools (fail closed)', async (t) => {
+  const calls = stubAll(t);
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(github, 'getCollaboratorPermission', async () => {
+    throw new Error('boom');
+  });
+  assert.equal(await processTask(githubTask('@lxagents close this issue')), 'success');
+  assert.equal(toolNames(calls.complete[0]).includes('close_issue'), false);
+});
+
+test('"close this issue" runs close_issue on the thread and the answer reports it', async (t) => {
+  const calls = stubAll(t, { permission: 'write' });
+  const replies = [
+    { content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'close_issue', arguments: '{}' } }] },
+    { content: 'Closed #3.' },
+  ];
+  openRouter.complete.mock.mockImplementation(async (req) => {
+    calls.complete.push(structuredClone(req));
+    return replies.shift();
+  });
+  t.mock.method(github, 'setIssueState', async (repo, number, state) => ({ number, state, url: `https://github.com/${repo}/issues/${number}` }));
+  assert.equal(await processTask(githubTask('@lxagents close this issue')), 'success');
+  assert.deepEqual(github.setIssueState.mock.calls[0].arguments.slice(0, 3), ['acme/web', 3, 'closed']);
+  assert.match(calls.complete[1].messages.at(-1).content, /Issue #3 is now closed/);
+  assert.match(calls.complete[0].messages[0].content, /This comment is on issue #3/);
+  assert.match(calls.posted[0].body, /^Closed #3\./);
+});
+
+test('a GitLab Developer gets the issue tools, a Reporter does not', async (t) => {
+  for (const [accessLevel, manage] of [[30, true], [20, false]]) {
+    const calls = stubAll(t, { accessLevel });
+    t.mock.method(gitlab, 'listNotes', async () => []);
+    t.mock.method(gitlab, 'groupExists', async () => true);
+    t.mock.method(gitlab, 'isGroupMember', async () => true);
+    t.mock.method(gitlab, 'getRepoTree', async () => ({ paths: [], truncated: false }));
+    t.mock.method(gitlab, 'postNote', async () => {});
+    const payload = {
+      object_kind: 'note',
+      user: { id: 8, username: 'dave' },
+      project: { id: 12, path_with_namespace: 'grp/app', default_branch: 'main' },
+      object_attributes: { id: 70, note: '@lxagents reopen this issue', noteable_type: 'Issue' },
+      issue: { iid: 4, title: 'Bug', description: '' },
+    };
+    assert.equal(await processTask({ id: 't4', platform: 'gitlab', event: 'note', payload: JSON.stringify(payload) }), 'success');
+    assert.equal(toolNames(calls.complete[0]).includes('reopen_issue'), manage, String(accessLevel));
+    assert.deepEqual(gitlab.getMemberAccessLevel.mock.calls[0].arguments, [12, '8']);
+    t.mock.restoreAll();
+  }
 });
 
 test('the comment gets an eyes reaction as soon as the agent picks it up', async (t) => {

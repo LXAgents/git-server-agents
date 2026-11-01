@@ -12,7 +12,8 @@ const { findProvider } = require('../ai/providers');
 const { AgentError, formatReply } = require('../agentErrors');
 const { createRepoTools } = require('./repoTools');
 const { platformOf } = require('./platform');
-const { isOrgMember, isRepoMember } = require('./membership');
+const { isOrgMember, isRepoMember, canManage } = require('./membership');
+const { createThreadActions } = require('./threadActions');
 const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require('./prompt');
 const { parseLoopLimit } = require('./loopLimit');
 const { chatWithFallback } = require('./keyFallback');
@@ -103,16 +104,19 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   ctx.token = token;
   await acknowledge(task, api, comment, token);
 
-  const [diff, thread, choice] = await Promise.all([
+  const [diff, thread, choice, manage] = await Promise.all([
     api.diff(comment, token),
     api.history(comment, token),
     chooseModelAndKeys(task, payload, comment, parsed, identity, access, token),
+    canManage(task.platform, identity, comment, token),
   ]);
   const { model, providerInfo, baseUrl, candidates } = choice;
   ctx.model = model;
 
   const ref = await api.resolveRef(comment, token);
-  const repo = ref ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }) : null;
+  const asker = comment.author || identity.triggerUser || 'unknown';
+  const actions = manage ? createThreadActions({ platform: task.platform, thread: comment, token, asker }) : null;
+  const repo = ref ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token }, { actions }) : null;
   const request = {
     provider: providerInfo.slug,
     baseUrl,
@@ -124,7 +128,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     spend: newSpend(),
   };
   const { rounds } = parseLoopLimit(parsed.prompt);
-  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)`, request.logMeta);
+  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)${actions ? ', with the manage tools' : ''}`, request.logMeta);
   const answer = await chatWithFallback(
     candidates,
     (key) =>
@@ -132,7 +136,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
         request,
         apiKey: key.apiKey,
         system: buildSystemPrompt(comment, diff),
-        toolGuide: buildToolGuide({ rounds }),
+        toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment }),
         maxRounds: rounds,
         history: buildHistory(thread, comment.commentId),
         question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
@@ -146,7 +150,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     providerName: providerInfo.name,
     cost: formatCost(request.spend),
     loop: rounds,
-    asker: comment.author || identity.triggerUser || 'unknown',
+    asker,
   });
   await api.postReply(comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
   return 'success';

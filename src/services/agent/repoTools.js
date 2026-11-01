@@ -1,8 +1,10 @@
-// Read-only access to the repository the comment was made in, through the GitHub or GitLab
-// REST APIs (never a clone). The model reaches it through two tools; models without tool
-// support get the same context added to the prompt instead.
+// The model's tools. Two read the repository the comment was made in, through the GitHub or
+// GitLab REST APIs (never a clone); models without tool support get that context added to the
+// prompt instead. The manage tools change issues and pull requests, and are offered only to
+// commenters with write access (see membership.canManage and threadActions).
 const { trimTrailingSlashes } = require('../../utils/strings');
 const { platformOf } = require('./platform');
+const { ToolInputError } = require('./threadActions');
 
 const MAX_FILE_CHARS = 40_000;
 const MAX_TREE_PATHS = 2_000;
@@ -34,6 +36,54 @@ const TOOLS = [
   },
 ];
 
+const fn = (name, description, properties, required = []) => ({
+  type: 'function',
+  function: { name, description, parameters: { type: 'object', properties, ...(required.length ? { required } : {}) } },
+});
+
+const NUMBER_ARG = (noun) => ({
+  type: 'integer',
+  description: `The ${noun} number, e.g. 12 for #12. Omit it to mean the ${noun} this comment was made on.`,
+});
+
+const ISSUE_TOOLS = [
+  fn(
+    'create_issue',
+    'Open a new issue in this repository. Use it only when the commenter asks for an issue to be created.',
+    {
+      title: { type: 'string', description: 'The issue title, one line.' },
+      body: { type: 'string', description: 'The issue description in Markdown.' },
+      labels: { type: 'array', items: { type: 'string' }, description: 'Existing label names to add. Optional.' },
+    },
+    ['title']
+  ),
+  fn('close_issue', 'Close an issue. Use it only when the commenter asks for the issue to be closed.', { number: NUMBER_ARG('issue') }),
+  fn('reopen_issue', 'Reopen a closed issue. Use it only when the commenter asks for the issue to be reopened.', { number: NUMBER_ARG('issue') }),
+];
+const MANAGE_TOOLS = [...ISSUE_TOOLS];
+
+// The platform's own reason for a refusal, short enough for one tool result.
+function platformMessage(data) {
+  if (!data) return '';
+  if (typeof data === 'string') return data.slice(0, 300);
+  const parts = [data.message, data.error, ...(Array.isArray(data.errors) ? data.errors.map((e) => e.message || e.code) : [])];
+  const text = parts
+    .filter(Boolean)
+    .map((p) => (typeof p === 'string' ? p : JSON.stringify(p)))
+    .join('; ');
+  return text.slice(0, 300);
+}
+
+// A failed tool as text for the model, so it can fix the call or explain the failure.
+function failureText(name, err) {
+  if (err instanceof ToolInputError || err.notIssue) return `Error: ${name}: ${err.message}.`;
+  const res = err.response;
+  if (!res) return `Error: ${name} failed (${err.message}).`;
+  const detail = platformMessage(res.data);
+  const hint = res.status === 403 || res.status === 401 ? ' The app may lack the permission for this.' : '';
+  return `Error: ${name} failed (HTTP ${res.status}${detail ? `: ${detail}` : ''}).${hint}`;
+}
+
 function cleanPath(path) {
   return trimTrailingSlashes(
     String(path || '')
@@ -42,8 +92,9 @@ function cleanPath(path) {
   );
 }
 
-// `source` is { platform, repo, projectId, ref, token }.
-function createRepoTools(source) {
+// `source` is { platform, repo, projectId, ref, token }. `actions` are the manage tools'
+// handlers from threadActions, or null when the commenter may only read.
+function createRepoTools(source, { actions = null } = {}) {
   const api = platformOf(source.platform);
   let treePromise = null;
 
@@ -87,9 +138,10 @@ function createRepoTools(source) {
     try {
       if (name === 'list_files') return await listFiles(args.folder);
       if (name === 'read_file') return await readFile(args.path);
+      if (actions && Object.hasOwn(actions, name)) return await actions[name](args || {});
       return `Error: unknown tool ${name}.`;
     } catch (err) {
-      return `Error: ${name} failed (${(err.response && err.response.status) || err.message}).`;
+      return failureText(name, err);
     }
   }
 
@@ -111,11 +163,12 @@ function createRepoTools(source) {
     return sections.join('\n\n');
   }
 
-  return { tools: TOOLS, run, listFiles, readFile, inlineContext };
+  const tools = actions ? [...TOOLS, ...MANAGE_TOOLS.filter((t) => Object.hasOwn(actions, t.function.name))] : TOOLS;
+  return { tools, run, listFiles, readFile, inlineContext };
 }
 
 function escapeRe(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-module.exports = { TOOLS, createRepoTools, MAX_FILE_CHARS, MAX_TREE_PATHS };
+module.exports = { TOOLS, MANAGE_TOOLS, createRepoTools, failureText, MAX_FILE_CHARS, MAX_TREE_PATHS };

@@ -112,15 +112,52 @@ async function groupExists(group) {
   }
 }
 
-// Whether the user is a member of the project (any access level, inherited included).
-async function isProjectMember(projectId, userId) {
+// The user's access level on the project (inherited included), or 0. 30 is Developer.
+async function getMemberAccessLevel(projectId, userId) {
   try {
     const { data } = await client().get(`${project(projectId)}/members/all/${encodeURIComponent(userId)}`);
-    return Boolean(data && String(data.id) === String(userId)) && data.state !== 'blocked';
+    if (!data || String(data.id) !== String(userId) || data.state === 'blocked') return 0;
+    return Number(data.access_level) || 0;
   } catch (err) {
-    if (err.response && err.response.status === 404) return false;
+    if (err.response && err.response.status === 404) return 0;
     throw err;
   }
 }
 
-module.exports = { awardEmoji, isProjectMember, getMergeRequestDiff, postNote, listNotes, getRepoTree, getFileContent, isGroupMember, groupExists };
+// Whether the user is a member of the project (any access level, inherited included).
+async function isProjectMember(projectId, userId) {
+  return (await getMemberAccessLevel(projectId, userId)) > 0;
+}
+
+// GitLab says "opened" where GitHub says "open"; the agent always sees "open".
+const issueOf = (data) => ({ number: data.iid, url: data.web_url, state: data.state === 'opened' ? 'open' : data.state });
+
+async function createIssue(projectId, { title, body, labels }) {
+  const { data } = await client().post(`${project(projectId)}/issues`, {
+    title,
+    description: body,
+    ...(labels ? { labels: labels.join(',') } : {}),
+  });
+  return issueOf(data);
+}
+
+// state is "open" or "closed", as on GitHub; GitLab takes a state_event.
+async function setIssueState(projectId, iid, state) {
+  const { data } = await client().put(`${project(projectId)}/issues/${iid}`, { state_event: state === 'closed' ? 'close' : 'reopen' });
+  return issueOf(data);
+}
+
+module.exports = {
+  getMemberAccessLevel,
+  createIssue,
+  setIssueState,
+  awardEmoji,
+  isProjectMember,
+  getMergeRequestDiff,
+  postNote,
+  listNotes,
+  getRepoTree,
+  getFileContent,
+  isGroupMember,
+  groupExists,
+};

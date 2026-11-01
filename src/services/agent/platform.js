@@ -9,6 +9,8 @@ function githubAccount(payload) {
   return (payload.repository && payload.repository.owner) || (payload.installation && payload.installation.account) || {};
 }
 
+const GITLAB_DEVELOPER = 30;
+
 const adapters = {
   github: {
     name: 'GitHub',
@@ -37,6 +39,13 @@ const adapters = {
     isRepoMember: (identity, c, token) => github.isCollaborator(c.repo, identity.triggerUser, token),
     getRepoTree: (source) => github.getRepoTree(source.repo, source.ref, source.token),
     getFileContent: (source, path) => github.getFileContent(source.repo, path, source.ref, source.token),
+    // Changing issues and pull requests needs write access (write, maintain or admin).
+    async canWrite(identity, c, token) {
+      const permission = await github.getCollaboratorPermission(c.repo, identity.triggerUser, token);
+      return permission === 'admin' || permission === 'write';
+    },
+    createIssue: (c, fields, token) => github.createIssue(c.repo, fields, token),
+    setIssueState: (c, number, state, token) => github.setIssueState(c.repo, number, state, { reason: state === 'closed' ? 'completed' : undefined }, token),
   },
   gitlab: {
     name: 'GitLab',
@@ -56,6 +65,10 @@ const adapters = {
     isRepoMember: (identity, c) => gitlab.isProjectMember(c.projectId, identity.triggerUserId),
     getRepoTree: (source) => gitlab.getRepoTree(source.projectId, source.ref),
     getFileContent: (source, path) => gitlab.getFileContent(source.projectId, path, source.ref),
+    // Developer (30) or above may change issues and merge requests.
+    canWrite: async (identity, c) => (await gitlab.getMemberAccessLevel(c.projectId, identity.triggerUserId)) >= GITLAB_DEVELOPER,
+    createIssue: (c, fields) => gitlab.createIssue(c.projectId, fields),
+    setIssueState: (c, number, state) => gitlab.setIssueState(c.projectId, number, state),
   },
 };
 
