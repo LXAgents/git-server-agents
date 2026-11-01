@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.15.0](1/15/0/CHANGELOG.md) | Tool rounds set in the comment; issue and pull request tools for commenters with write access | `CHANGELOG.md` |
 | [1.14.0](1/14/0/CHANGELOG.md) | The comment trigger is now `@lxagents` | `CHANGELOG.md` |
 | [1.13.1](1/13/1/CHANGELOG.md) | Agent split by job, platform adapter, parallel lookups, grouped services | `CHANGELOG.md` |
 | [1.13.0](1/13/0/CHANGELOG.md) | Five AI providers with your own keys; provider and model per user, org and repository | `CHANGELOG.md` |
