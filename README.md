@@ -2,14 +2,16 @@
 
 A webhook server and AI agent for GitHub and GitLab apps. Anyone can log in with GitHub or
 GitLab, and comment on a pull request, merge request or issue in an imported org. The server queues the event, and a
-background worker sends the comment to an OpenRouter model, together with:
+background worker sends the comment to the chosen provider's model (OpenRouter, OpenAI,
+Anthropic, DeepSeek or z.ai), together with:
 
 - the diff,
 - the earlier conversation,
 - any repository files the model asks for.
 
-The answer is posted back as a reply, with a footer naming the model, what the answer cost in
-US dollars (every OpenRouter call it took, added up; `0 USD` for free models), and the
+The answer is posted back as a reply, with a footer naming the model and its provider, what the
+answer cost in US dollars (every OpenRouter call it took, added up; `0 USD` for free models;
+`unknown` for the other providers, which report no cost), and the
 commenter who asked (their username, as `@name` in a code span, so nobody is notified).
 Every reply ends with the hidden marker `<!-- LXAgents -->` (error replies also carry
 `<!-- LXAgents:error -->`), so the agent never answers itself. Replies from before 1.11.1, with
@@ -29,7 +31,7 @@ all come from the REST APIs.
    Every webhook is logged with its outcome (`ignored`, `403 <reason>` or `queued task <id>`).
 5. The worker claims the task and puts 👀 on the comment, so the commenter sees it was picked
    up. It re-checks the org, then fetches the diff (PRs and MRs only) and the last 30 comments.
-   It calls OpenRouter and posts the reply. The task ends as `success`, `skipped` or `failed`
+   It calls the provider and posts the reply. The task ends as `success`, `skipped` or `failed`
    (see `errorLog`). A failed task also gets an error reply on the thread (see below).
    - Up to `WORKER_CONCURRENCY` (4) comments are answered at once, so a slow one doesn't hold
      up the rest.
@@ -53,17 +55,38 @@ question can follow on the same line or on the next lines:
 Review this diff.
 ```
 
-- **`@agents`** uses the stored model: the repository's, then the org's, then the commenting
-  user's, then `DEFAULT_MODEL` (`openrouter/free`). Models are set in the dashboard or the user
-  API, per modality; the agent uses the `text` one.
-- **`@vendor/model`** uses that model, whatever is stored.
+- **`@agents`** uses the stored provider and model: the repository's, then the org's, then the
+  commenting user's, then `DEFAULT_PROVIDER` / `DEFAULT_MODEL` (`openrouter` /
+  `openrouter/free`). They are set in the dashboard or the user API, per modality; the agent
+  uses the `text` one.
+- **`@vendor/model`** uses that OpenRouter model, whatever is stored.
+
+### Providers and keys (bring your own key)
+
+| Provider | Slug | Model ids look like | API |
+|---|---|---|---|
+| OpenRouter | `openrouter` | `openai/gpt-5`, `openrouter/free` | `OPENROUTER_API_URL` (`https://openrouter.ai/api/v1`) |
+| OpenAI | `openai` | `gpt-5` | `OPENAI_API_URL` (`https://api.openai.com/v1`) |
+| Anthropic | `anthropic` | `claude-opus-5-5` | `ANTHROPIC_API_URL` (`https://api.anthropic.com`), official SDK |
+| DeepSeek | `deepseek` | `deepseek-chat` | `DEEPSEEK_API_URL` (`https://api.deepseek.com`), OpenAI-compatible |
+| z.ai (GLM) | `zai` | `glm-4.6` | `ZAI_API_URL` (`https://api.z.ai/api/paas/v4`; `https://open.bigmodel.cn/api/paas/v4` in mainland China), OpenAI-compatible |
+
+The server holds **no key of its own** for any provider. Every key belongs to a user, an org or
+a repository and is stored for one provider. Before any model call the agent looks up the keys
+for the provider it resolved; when the commenter may use none, it answers `NO_API_KEY` naming
+that provider instead of calling a model.
+
+Model lists come live from each provider's API. OpenRouter's is public. The others list
+models only to a key holder, so `GET /api/user/models?provider=openai` uses your own OpenAI
+key, or the key of an org (`&orgId=`) or repository (`&repoId=`) you manage. z.ai falls back to
+its published GLM models if its `/models` answers 404.
 - A comment that starts any other way gets no answer, and neither does one whose first line is a
   user mention such as `@alice`.
 
 ### When the agent can't answer
 
 A trigger never goes unanswered. If anything fails, the agent replies with a code, the HTTP
-status when there is one, what happened (OpenRouter's or the platform's own message), whether
+status when there is one, what happened (the provider's or the platform's own message), whether
 retrying helps, and the task id. For a rate limit it gives the time the limit lifts. When
 several keys were tried, it lists each key's owner type and status, but never the key itself.
 Error replies are left out of the conversation history.
@@ -71,12 +94,12 @@ Error replies are left out of the conversation history.
 | Code | Status | Meaning | Retry |
 |---|---|---|---|
 | `NO_QUESTION` | | The trigger asks nothing | Add the question |
-| `NO_API_KEY` | | No active OpenRouter key the commenter may use | No: log in and add a key |
+| `NO_API_KEY` | | No active key for the resolved provider that the commenter may use | No: log in and add a key for that provider |
 | `INVALID_API_KEY` | 401 | The key is invalid, revoked or disabled | No: replace the key |
 | `INSUFFICIENT_CREDITS` | 402 | The key's balance has run out | No: add credits, or use a `:free` model |
 | `CONTENT_FLAGGED` | 403 | Moderation refused the input | No: rephrase |
 | `MODEL_NOT_FOUND` | 404 | The model id is wrong or has no provider | No: fix the id |
-| `BAD_REQUEST` | 400 | OpenRouter rejected the request | No: try another model |
+| `BAD_REQUEST` | 400 | The provider rejected the request | No: try another model |
 | `TIMEOUT` | 408 | A model call took over 60 s, or the answer over 4 minutes | Once, then pick a faster model |
 | `RATE_LIMITED` | 429 | The rate limit or the free-model daily limit was hit | After the time given |
 | `PROVIDER_UNAVAILABLE` | 502, 503 | The model's provider is down or busy | In a few minutes |
@@ -128,7 +151,7 @@ Needs Node.js 22.22.2+, 24.15+ or 26 (`.nvmrc` pins 26 LTS, which CI uses: `nvm 
 cp .env.example .env              # fill in secrets, see below
 npm install
 npm run db:push                   # copies the schema for PROD, creates the tables, generates the client
-npm run db:seed                   # adds OpenRouter as the default provider
+npm run db:seed                   # adds the five AI providers (no keys)
 npm run dev                       # server + worker on SQLite, restarts on changes (node --watch)
 ```
 
@@ -150,8 +173,9 @@ the same way in `src/db.js`.
 | `GITHUB_URL`, `GITLAB_URL` | Web addresses for OAuth (default `https://github.com`, and `GITLAB_API_URL` without `/api/v4`). Change them only for GitHub Enterprise or self-managed GitLab |
 | `PUBLIC_URL` | This server's public address, used for the OAuth callback URL. Set it behind a proxy or on a platform |
 | `ENCRYPTION_KEY` | 32-byte key for stored API keys (`node scripts/manage.js new-encryption-key`) |
-| `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter/free`) |
-| `OPENROUTER_API_URL` | Where the model list comes from (default `https://openrouter.ai/api/v1`) |
+| `DEFAULT_PROVIDER`, `DEFAULT_MODEL` | What `@agents` uses when no repository, org or user model is set (default `openrouter`, `openrouter/free`). The commenter still needs their own key for it |
+| `OPENROUTER_API_URL`, `OPENAI_API_URL`, `ANTHROPIC_API_URL`, `DEEPSEEK_API_URL`, `ZAI_API_URL` | Each provider's API base URL (defaults in the providers table above); the seed stores them |
+| `MAX_OUTPUT_TOKENS` | The longest answer a provider may write (default 16000; Anthropic requires a limit) |
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `WORKER_CONCURRENCY` | How many comments are answered at once (default 4) |
 | `MODEL_TIMEOUT_MS`, `TASK_TIMEOUT_MS` | Limits for one model call (default 60000) and one whole answer (default 240000) |
@@ -199,7 +223,7 @@ On every start, `docker-entrypoint.sh` does the following, then starts the serve
 1. Picks the schema for `PROD`.
 2. Generates the Prisma client.
 3. Runs `prisma db push`, which creates or updates the tables. It stops instead of dropping data.
-4. Seeds OpenRouter.
+4. Seeds the five AI providers.
 
 So an empty database is ready on first boot, with no shell needed. `/health` drives the
 container health check.
@@ -298,7 +322,7 @@ A repository admin is GitHub repository permission `admin`, or GitLab access lev
 (40) or above on the project. The repository must be in an imported org. Like org ownership,
 it is asked of the platform on every change.
 
-For an OpenRouter call the worker tries every active key in order: the repository's keys,
+For a model call the worker tries every active key for the resolved provider, in order: the repository's keys,
 then the org's keys, then the commenting user's keys, each by `priority` (highest first), and
 only the groups the commenter may use (see above). When a key fails with 401,
 402, 403, 429, 5xx, a timeout or a network error, the next key is tried; 400 and 404 stop at
@@ -316,7 +340,8 @@ once because every key would fail the same way.
 | GET | `/repos` | |
 | DELETE | `/repos/:id` | (also removes the repository's keys and model) |
 | GET | `/keys` | |
-| POST | `/keys` | `{ target: "user", userId, apiKey, priority? }` or `{ target: "org", appInstallationId, apiKey, priority? }` |
+| GET | `/providers` | The AI providers, for the dropdown |
+| POST | `/keys` | `{ target: "user", userId, apiKey, provider?, priority? }` or `{ target: "org", appInstallationId, apiKey, provider?, priority? }`; `provider` is a slug, default `openrouter` |
 | DELETE | `/keys/:id` | |
 
 ### User API (`/api/user`)
@@ -324,27 +349,30 @@ once because every key would fail the same way.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/me` | The signed-in user |
-| GET, POST | `/keys` | Own keys; POST `{ apiKey, priority? }` |
+| GET, POST | `/keys` | Own keys; POST `{ apiKey, provider?, priority? }` |
 | DELETE | `/keys/:keyId` | Own keys only |
 | GET | `/orgs` | Imported orgs the user owns now |
 | GET | `/orgs/importable` | Orgs the user owns on the platform, with `importable` and `reason` |
 | POST | `/orgs/import` | `{ orgName }`; owner only |
 | DELETE | `/orgs/:id` | Owner only |
-| GET, POST | `/orgs/:id/keys` | Owner only; POST `{ apiKey, priority? }` |
+| GET, POST | `/orgs/:id/keys` | Owner only; POST `{ apiKey, provider?, priority? }` |
 | DELETE | `/orgs/:id/keys/:keyId` | Owner only |
-| GET, PUT | `/orgs/:id/models` | Owner only; PUT `{ modality, model }` |
-| GET | `/models?modality=text` | OpenRouter's live model list (cached 5 minutes). Other modalities answer 400 for now |
-| GET, PUT | `/models/settings` | Own model per modality; PUT `{ modality, model }`, `model: null` clears it |
+| GET, PUT | `/orgs/:id/models` | Owner only; PUT `{ modality, provider?, model }` |
+| GET | `/providers` | The AI providers: `{ id, name, example, keyForModels, reportsCost }` |
+| GET | `/models?modality=text&provider=openai` | That provider's live model list (cached 5 minutes per provider and key); `orgId` or `repoId` lists with that org's or repository's key. `provider` defaults to `openrouter`. Other modalities answer 400 for now |
+| GET, PUT | `/models/settings` | Own provider and model per modality, returned as `{ text: { provider, model } }`; PUT `{ modality, provider?, model }`, `model: null` clears it |
 | GET | `/repos` | Imported repositories the user administers now |
 | GET | `/repos/importable` | Repositories the user administers, with `importable` and `reason` |
 | POST | `/repos/import` | `{ externalId }` (the platform's repository or project id); admin only, org must be imported |
 | DELETE | `/repos/:id` | Admin only |
-| GET, POST | `/repos/:id/keys` | Admin only; POST `{ apiKey, priority? }` |
+| GET, POST | `/repos/:id/keys` | Admin only; POST `{ apiKey, provider?, priority? }` |
 | DELETE | `/repos/:id/keys/:keyId` | Admin only |
-| GET, PUT | `/repos/:id/models` | Admin only; PUT `{ modality, model }` |
+| GET, PUT | `/repos/:id/models` | Admin only; PUT `{ modality, provider?, model }` |
 
 Modalities are `text`, `image`, `video`, `speech`, `decisions`, `embeddings`, `rerank`,
-`transcription` and `audio`. Every one can be stored; the agent uses `text` today.
+`transcription` and `audio`. Every one can be stored; the agent uses `text` today. A missing
+`provider` means `openrouter`, and the model id is checked against the provider (OpenRouter ids
+are `vendor/name`).
 
 Keys are returned with their last four characters only. Errors are JSON `{ "error": "..." }`
 with 400, 401, 403, 404 or 409.

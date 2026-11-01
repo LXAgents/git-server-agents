@@ -45,3 +45,23 @@ The dashboard half (provider dropdowns, provider + model per level) is git-clien
 ### Task 1 — plan/multi-provider-byok
 
 Record written before the work. Nothing else changed.
+
+### Task 2 — feat/multi-provider-byok
+
+- **Schema:** `Provider.slug` (optional, indexed, not unique so `db push` needs no
+  `--accept-data-loss` on old databases) and `ModelSetting.provider` (default `openrouter`).
+- **Providers:** `src/services/providers.js` is the catalogue (slug, name, API style, base URL
+  from `*_API_URL`, model-id rule). The seed upserts the five by slug and fills the slug on the
+  old `OpenRouter` row.
+- **LLM layer:** `llmService.complete({ provider, ... })` routes to `openRouterService`,
+  `openAiService` (OpenAI, DeepSeek, z.ai) or `anthropicService` (official `@anthropic-ai/sdk`,
+  `maxRetries: 0`, tool calls translated both ways, Anthropic's own blocks sent back unchanged
+  on tool rounds). Only OpenRouter reports cost.
+- **Keys:** created per provider (`provider` slug, default `openrouter`); views add
+  `providerSlug`. `getProviderKeys(slug, …)`. Strict BYOK: `NO_API_KEY` names the provider.
+- **Models:** settings are `{ provider, model }` per modality; `resolveModel` returns
+  `{ provider, model, source }`; `GET /api/user/models?provider=` lists live with the caller's
+  key (or a managed org's / repo's); z.ai falls back to known GLM ids on 404.
+- **Routes:** `GET /api/user/providers`, `GET /api/admin/providers`.
+- Footer gains a `Provider:` line. `@vendor/model` stays OpenRouter.
+- Tests: 166 pass on SQLite, with the provider APIs mocked (no live call from the sandbox).
