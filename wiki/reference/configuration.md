@@ -20,6 +20,7 @@ Every setting is an environment variable, read from `.env` in development or fro
 | `WORKER_INLINE`, `WORKER_POLL_MS` | Run the worker in the server process, and its poll interval |
 | `WORKER_CONCURRENCY` | How many comments are answered at once (default 4) |
 | `MODEL_TIMEOUT_MS`, `TASK_TIMEOUT_MS` | Limits for one model call (default 60000) and one whole answer (default 240000) |
+| `MAX_TOOL_ROUNDS` | The most tool rounds a comment may ask for, such as "run this 5 times" (default 20). A comment that names no number gets 3 |
 | `PLATFORM_TIMEOUT_MS` | Limit for each GitHub or GitLab API call (default 30000) |
 | `LOG_RETENTION_DAYS` | Days stored log lines are kept for the dashboard's Logs page (default 14) |
 | `LOG_STORE` | `false` prints log lines without storing them |
