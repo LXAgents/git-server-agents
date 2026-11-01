@@ -36,3 +36,10 @@ This record was written before the work. Nothing else changed.
 - `services/workspaceKeyService.js`: `getWorkspaceKeys(provider, account, installation, repository)` returns key handles repo → org → user, each by priority; `reveal()` re-reads the row and decrypts at the moment of use, and refuses a key switched off since. No key → `NoWorkspaceKeyError` (401, code `NO_WORKSPACE_KEY`). `findWorkspaceKeys` returns `[]` instead.
 - `services/workspaceKeyStore.js` + `controllers/workspaceKeyController.js`: `/api/user/workspace-keys`, `/orgs/:id/workspace-keys` (owner), `/repos/:id/workspace-keys` (admin). GitHub owners only. `keyStore` now exports `ownerView`.
 - Tests: `test/workspaceKeys.test.js`.
+
+### Task 3 — feat/codespaces
+
+- `services/platforms/githubCodespacesService.js`: `createCodespace(repoFullName, branch, token)` (POST `/repos/{owner}/{repo}/codespaces` with `ref` and `idle_timeout_minutes`), `getCodespaceStatus`, `waitUntilAvailable` (decrypts again for every poll through a `getToken` callback), `deleteCodespace` (404 counts as deleted), `executeCommand` (`gh codespace ssh -c <name> -- bash -lc <command>` through `execFile`, no host shell, child env = `GH_TOKEN` + PATH/HOME/LANG only, never the server's secrets). Failures are `CodespacesError` with `source: 'codespaces'` and code `WORKSPACE_ERROR`, `WORKSPACE_UNAVAILABLE` or `BAD_INPUT`.
+- `config.workspace` (`WORKSPACE_*_MS`, `WORKSPACE_IDLE_TIMEOUT_MINUTES`, `GH_PATH`), `.env.example`, configuration page.
+- Dockerfile installs `gh` from GitHub's apt repository and `openssh-client`. Not built in the sandbox.
+- Tests: `test/codespaces.test.js` (mock REST API, mocked `execFile`).

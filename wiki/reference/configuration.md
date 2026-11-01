@@ -21,6 +21,11 @@ Every setting is an environment variable, read from `.env` in development or fro
 | `WORKER_CONCURRENCY` | How many comments are answered at once (default 4) |
 | `MODEL_TIMEOUT_MS`, `TASK_TIMEOUT_MS` | Limits for one model call (default 60000) and one whole answer (default 240000) |
 | `MAX_TOOL_ROUNDS` | The most tool rounds a comment may ask for, such as "run this 5 times" (default 20). A comment that names no number gets 3 |
+| `WORKSPACE_TASK_TIMEOUT_MS` | The limit for one answer that may use the workspace tools, in place of `TASK_TIMEOUT_MS` (default 900000) |
+| `WORKSPACE_BOOT_TIMEOUT_MS` | How long `create_workspace` waits for a codespace to become Available (default 300000) |
+| `WORKSPACE_EXEC_TIMEOUT_MS` | The limit for one `exec_command` (default 300000) |
+| `WORKSPACE_IDLE_TIMEOUT_MINUTES` | GitHub stops an idle codespace after this many minutes, 5 to 240 (default 10) |
+| `GH_PATH` | The gh CLI used for `gh codespace ssh` (default `gh`; the Docker image installs it with an SSH client) |
 | `PLATFORM_TIMEOUT_MS` | Limit for each GitHub or GitLab API call (default 30000) |
 | `LOG_RETENTION_DAYS` | Days stored log lines are kept for the dashboard's Logs page (default 14) |
 | `LOG_STORE` | `false` prints log lines without storing them |
