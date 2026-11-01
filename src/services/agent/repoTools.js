@@ -89,15 +89,14 @@ const MANAGE_TOOLS = [...ISSUE_TOOLS, ...PULL_REQUEST_TOOLS];
 const READ_THREAD_TOOLS = [
   fn(
     'read_issue',
-    'Read an issue the commenter mentioned (e.g. #12): title, state, description and its last comments. On GitHub a mentioned pull request number works too.',
-    { number: { type: 'integer', description: 'The mentioned issue number, e.g. 12 for #12.' } },
+    'Read an issue the commenter mentioned (e.g. !12 or #12 on GitHub, #12 on GitLab): title, state, description and its last comments. On GitHub a pull request number works too.',
+    { number: { type: 'integer', description: 'The mentioned issue number, e.g. 12 for !12 or #12.' } },
     ['number']
   ),
   fn(
     'read_pull_request',
     'Read a pull request (merge request on GitLab) the commenter mentioned, or this one: title, state, branches, description, last comments and its diff.',
-    { number: { type: 'integer', description: 'The pull request number, e.g. 12 for #12 (!12 on GitLab).' } },
-    ['number']
+    { number: { type: 'integer', description: 'The pull request number, e.g. 12 for #12 (!12 on GitLab). Leave it out for this one.' } }
   ),
   fn('list_commits', 'List the commits of this pull request (merge request on GitLab), or of one the commenter mentioned: sha, title and author, oldest first.', {
     number: NUMBER_ARG('pull request'),

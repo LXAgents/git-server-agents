@@ -16,10 +16,19 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/agent-pr-branch` | `.agents/` | |
+| 1 | Plan | This record | git-server-agents | `plan/agent-pr-branch` | `.agents/` | #81 |
 | 2 | PR branches | Payload refs, prompt line, own-PR read tool, tests, docs | git-server-agents | `feat/pr-branch` | `src/services/agent/`, `src/services/eventService.js`, `test/`, `wiki/` | |
 | 3 | Release | 1.17.0 changelog and version | git-server-agents | `release/1.17.0` | `package.json`, `wiki/logs/` | |
 
 ### Task 1 — plan/agent-pr-branch
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/pr-branch
+
+- `toComment` carries `headRef` / `baseRef` from GitHub review-comment and GitLab MR-note payloads.
+- `platform.resolveSource` (was `resolveRef`) returns `{ ref, head, base }`. On a GitHub PR-conversation comment it reads them from the PR it already fetches.
+- `buildSystemPrompt(comment, diff, { head, base, sha })` adds `Branches: \`head\` into \`base\`` and `Head commit:` on a PR or MR.
+- `read_pull_request` is offered on a PR thread without a mention, and its `number` may be left out for this PR.
+- owen's follow-up (2026-11-01, "What !1 about?" was answered about issue #2): on GitHub `!N` now names an issue, and the tool guide says `!12` is an issue and `#12` a PR (or an issue). GitLab keeps its own `#` issue / `!` MR. The guide also tells the model to answer about the mentioned thread, or say it can't be read, instead of falling back to this one.
+- Tests: 201 pass on SQLite.

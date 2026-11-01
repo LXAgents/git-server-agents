@@ -1,7 +1,7 @@
 // Read-only tools for other threads in the same repository: issues, pull requests (merge
 // requests on GitLab) with their diffs, and their commits. Another issue or PR is opened only
-// when the commenter's own message mentions it (see references.js); this thread's own PR or MR
-// needs no mention. Everything returned is repository data, never instructions.
+// when the commenter's own message mentions it (see references.js); this thread's own PR or MR,
+// and its commits, need no mention. Everything returned is repository data, never instructions.
 const { platformOf } = require('./platform');
 const { ToolInputError, parseNumber } = require('./threadActions');
 
@@ -92,7 +92,8 @@ function createThreadReader({ platform, thread, token, refs }) {
       return [...header(`Issue #${issue.number}`, issue), '', 'Description:', cut(issue.body, MAX_BODY_CHARS, 'description') || '(none)', ...formatComments(comments)].join('\n');
     },
 
-    read_pull_request: (args) => readPullRequest(args),
+    // Without a number, this thread's own PR or MR.
+    read_pull_request: (args) => readPullRequest(args.number === undefined || args.number === null || args.number === '' ? { number: ownPull ?? undefined } : args),
 
     async list_commits(args) {
       const given = args.number !== undefined && args.number !== null && args.number !== '';
@@ -117,9 +118,10 @@ function createThreadReader({ platform, thread, token, refs }) {
     },
   };
 
-  // Issues and other PRs only when the comment mentions one; commits also on this PR or MR.
+  // Issues and other PRs only when the comment mentions one; this PR or MR and its commits always.
   const names = [];
-  if (refs.issues.size || refs.pulls.size) names.push('read_issue', 'read_pull_request');
+  if (refs.issues.size || refs.pulls.size) names.push('read_issue');
+  if (ownPull || refs.issues.size || refs.pulls.size) names.push('read_pull_request');
   if (ownPull || refs.pulls.size || refs.shas.size) names.push('list_commits', 'read_commit');
   return Object.fromEntries(names.map((name) => [name, handlers[name]]));
 }

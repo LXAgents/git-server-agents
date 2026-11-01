@@ -56,6 +56,8 @@ function githubComment(event, body) {
       number: body.pull_request.number,
       pullUrl: body.pull_request.url,
       headSha: (body.pull_request.head && body.pull_request.head.sha) || null,
+      headRef: (body.pull_request.head && body.pull_request.head.ref) || null,
+      baseRef: (body.pull_request.base && body.pull_request.base.ref) || null,
       title: body.pull_request.title || '',
       description: body.pull_request.body || '',
     };
@@ -84,6 +86,8 @@ function gitlabComment(event, body) {
       kind: 'pull_request',
       number: body.merge_request.iid,
       headSha: (body.merge_request.last_commit && body.merge_request.last_commit.id) || null,
+      headRef: body.merge_request.source_branch || null,
+      baseRef: body.merge_request.target_branch || null,
       title: body.merge_request.title || '',
       description: body.merge_request.description || '',
     };

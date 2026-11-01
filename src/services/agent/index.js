@@ -115,7 +115,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   const { model, providerInfo, baseUrl, candidates } = choice;
   ctx.model = model;
 
-  const ref = await api.resolveRef(comment, token);
+  const { ref, head, base } = await api.resolveSource(comment, token);
   const asker = comment.author || identity.triggerUser || 'unknown';
   const actions = manage ? createThreadActions({ platform: task.platform, thread: comment, token, asker }) : null;
   // Other threads are read only when the commenter's own message mentions them.
@@ -140,7 +140,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
       converse({
         request,
         apiKey: key.apiKey,
-        system: buildSystemPrompt(comment, diff),
+        system: buildSystemPrompt(comment, diff, { head, base, sha: ref !== comment.defaultBranch ? ref : null }),
         toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader) }),
         maxRounds: rounds,
         history: buildHistory(thread, comment.commentId),

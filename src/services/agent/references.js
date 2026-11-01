@@ -1,7 +1,8 @@
 // The issues, pull requests and commits the commenter's own message points at. The read tools
 // only open these (and this thread), so nothing in a file, diff or earlier comment can steer the
 // agent into other threads. Other repositories are never matched.
-//   GitHub: #12, GH-12, https://github.com/owner/repo/issues/12 or /pull/12
+//   GitHub: #12 or GH-12 (a pull request, or an issue: they share numbers), !12 (an issue),
+//           https://github.com/owner/repo/issues/12 or /pull/12
 //   GitLab: #12 (issue), !12 (merge request), https://gitlab.com/group/project/-/issues/12
 //           or /-/merge_requests/12
 //   Both:   a commit sha of 7 to 40 hex characters, or a link to /commit/<sha>
@@ -47,6 +48,8 @@ function findReferences(text, { platform, repoPath }) {
       issues.add(n);
       pulls.add(n);
     }
+    // owen's convention on GitHub: !12 names an issue.
+    collect(body, /(?:^|[^\w&/!])!(\d{1,9})\b/g, issues);
   } else {
     collect(body, /(?:^|[^\w&/#])#(\d{1,9})\b/g, issues);
     collect(body, /(?:^|[^\w&/!])!(\d{1,9})\b/g, pulls);
