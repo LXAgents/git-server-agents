@@ -20,6 +20,23 @@ Review this diff.
 - A comment that starts any other way gets no answer, and neither does one whose first line is a
   user mention such as `@alice`.
 
+## How many tool rounds
+
+The agent works in **tool rounds**. In one round the model can call several tools at once, and
+all of them run before the next round. It gets **3 rounds** unless the comment asks for more or
+fewer in plain words:
+
+```
+@lxagents Run this 5 times: read every file under src/services and list the TODOs.
+```
+
+Phrases such as "run this 5 times", "loop 10 times", "up to 4 rounds", "repeat twice" or
+"iterate 7x" set the limit, and number words up to twenty work too. The count is only read in a
+sentence that asks to run, loop, repeat, use or limit something, so "it failed 5 times
+yesterday" changes nothing. The limit is capped by `MAX_TOOL_ROUNDS` (default 20), and the whole
+answer still has to finish within `TASK_TIMEOUT_MS`. The model is told how many rounds it has,
+and after the last one it must answer with what it has.
+
 ## Providers and keys (bring your own key)
 
 | Provider | Slug | Model ids look like | API |

@@ -111,7 +111,7 @@ function createRepoTools(source) {
     return sections.join('\n\n');
   }
 
-  return { run, listFiles, readFile, inlineContext };
+  return { tools: TOOLS, run, listFiles, readFile, inlineContext };
 }
 
 function escapeRe(text) {

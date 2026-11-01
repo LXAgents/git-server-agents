@@ -13,7 +13,8 @@ const { AgentError, formatReply } = require('../agentErrors');
 const { createRepoTools } = require('./repoTools');
 const { platformOf } = require('./platform');
 const { isOrgMember, isRepoMember } = require('./membership');
-const { buildSystemPrompt, buildHistory, replyFooter } = require('./prompt');
+const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require('./prompt');
+const { parseLoopLimit } = require('./loopLimit');
 const { chatWithFallback } = require('./keyFallback');
 const { converse } = require('./conversation');
 const { newSpend, formatCost } = require('./cost');
@@ -122,14 +123,17 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     logMeta: taskMeta(task),
     spend: newSpend(),
   };
-  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s)`, request.logMeta);
+  const { rounds } = parseLoopLimit(parsed.prompt);
+  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s), up to ${rounds} tool round(s)`, request.logMeta);
   const answer = await chatWithFallback(
     candidates,
     (key) =>
       converse({
         request,
         apiKey: key.apiKey,
-        system: buildSystemPrompt(comment, diff, { tools: Boolean(repo) }),
+        system: buildSystemPrompt(comment, diff),
+        toolGuide: buildToolGuide({ rounds }),
+        maxRounds: rounds,
         history: buildHistory(thread, comment.commentId),
         question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
         repo,
@@ -141,6 +145,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     model,
     providerName: providerInfo.name,
     cost: formatCost(request.spend),
+    loop: rounds,
     asker: comment.author || identity.triggerUser || 'unknown',
   });
   await api.postReply(comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);

@@ -25,3 +25,11 @@ status: in progress
 ### Task 1 — plan/agent-actions
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/agent-loop-limit
+
+- `agent/loopLimit.js` reads the rounds from the comment ("run this 5 times", "loop ten times", "up to 4 rounds", "twice"); a count only counts in a sentence with a run/loop/repeat-style verb. Default 3, capped by `MAX_TOOL_ROUNDS` (default 20).
+- `conversation.js` takes `maxRounds` and the tools from the repository tools object; `ANSWER_NOW` is exported for tests.
+- `prompt.js`: `buildSystemPrompt(comment, diff)` no longer describes tools. `buildToolGuide({ rounds })` does, and only the tool path adds it, so the no-tools fallback stops claiming tools.
+- owen asked (2026-11-01) for a `Loop:` footer line: it shows the rounds the answer was allowed, between Cost and User, and `stripReply` drops it from history.
+- Docs: the asking-the-agent guide, configuration, code layout, webhooks, README, `.env.example`. Tests: 168 pass on SQLite.

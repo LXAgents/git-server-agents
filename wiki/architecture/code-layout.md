@@ -11,7 +11,7 @@ src/controllers/ webhook, auth, admin, user and repository controllers
 src/middleware/  owner and platform-token sign-in, CORS
 src/services/    org check, task, comment parser, agent errors, key, key store, repository,
                  access checks, shared views, logs and crypto services
-  agent/         the agent: flow (index.js), prompt, tool loop, key fallback, cost,
+  agent/         the agent: flow (index.js), prompt, tool loop and its round limit, key fallback, cost,
                  membership, repository tools, and the GitHub/GitLab adapter
   ai/            providers, llmService and the OpenRouter, OpenAI and Anthropic clients,
                  model settings and live model lists
@@ -27,7 +27,7 @@ The worker (`src/worker.js`) claims a task and calls `processTask` in `src/servi
 2. Through the platform adapter (`agent/platform.js`): get the token, add the 👀 reaction, and fetch the diff and the thread.
 3. In parallel: the repository, org membership, the provider and model (`ai/modelService.js`), and repository membership (`agent/membership.js`).
 4. The keys for that provider (`keyService.js`), tried in turn (`agent/keyFallback.js`).
-5. The tool loop (`agent/conversation.js`) calls `ai/llmService.js`, which routes to the OpenRouter, OpenAI-compatible or Anthropic client.
+5. The tool loop (`agent/conversation.js`) runs as many rounds as the comment asks for (`agent/loopLimit.js`, default 3) and calls `ai/llmService.js`, which routes to the OpenRouter, OpenAI-compatible or Anthropic client.
 6. Post the answer with its footer (`agent/prompt.js`, `agent/cost.js`), or an error reply (`agentErrors.js`).
 
 GitHub and GitLab differences live only in `agent/platform.js` and `platforms/`. A new platform call goes into the adapter, never into an `if (platform === 'github')` branch.
