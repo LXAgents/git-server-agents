@@ -102,6 +102,9 @@ its published GLM models if its `/models` answers 404.
   - Files are cut at 40,000 characters and the list at 2,000 paths.
   - If the model doesn't support tools, the agent asks again without them. That second request
     includes the file list and any files the question names.
+- **This PR or MR:** its title, description, head and base branches, head commit and diff are in
+  the prompt, so "which branch is this?" needs no tool. `read_pull_request` also reads it without
+  a mention, for its current state, labels and latest comments.
 - **Other issues, pull requests and commits:** only the ones **your comment mentions**, in the
   same repository. `#12` and `GH-12` on GitHub (an issue or a PR, which share numbers), `#12`
   for an issue and `!12` for a merge request on GitLab, a link to one in this repository, or a
@@ -116,7 +119,7 @@ its published GLM models if its `/models` answers 404.
   | Tool | Reads |
   |---|---|
   | `read_issue` | Title, state, labels, description and the last 10 comments |
-  | `read_pull_request` | The same, plus its branches and its whole diff |
+  | `read_pull_request` | The same, plus its branches and its whole diff. Without a number, this PR or MR |
   | `list_commits` | This PR's or MR's commits (sha, title, author), or a mentioned one's |
   | `read_commit` | One commit's message and diff, for a sha from `list_commits` or the comment |
 

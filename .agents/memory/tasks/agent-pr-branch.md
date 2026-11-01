@@ -16,10 +16,18 @@ status: in-progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/agent-pr-branch` | `.agents/` | |
+| 1 | Plan | This record | git-server-agents | `plan/agent-pr-branch` | `.agents/` | #81 |
 | 2 | PR branches | Payload refs, prompt line, own-PR read tool, tests, docs | git-server-agents | `feat/pr-branch` | `src/services/agent/`, `src/services/eventService.js`, `test/`, `wiki/` | |
 | 3 | Release | 1.17.0 changelog and version | git-server-agents | `release/1.17.0` | `package.json`, `wiki/logs/` | |
 
 ### Task 1 — plan/agent-pr-branch
 
 This record was written before the work. Nothing else changed.
+
+### Task 2 — feat/pr-branch
+
+- `toComment` carries `headRef` / `baseRef` from GitHub review-comment and GitLab MR-note payloads.
+- `platform.resolveSource` (was `resolveRef`) returns `{ ref, head, base }`. On a GitHub PR-conversation comment it reads them from the PR it already fetches.
+- `buildSystemPrompt(comment, diff, { head, base, sha })` adds `Branches: \`head\` into \`base\`` and `Head commit:` on a PR or MR.
+- `read_pull_request` is offered on a PR thread without a mention, and its `number` may be left out for this PR.
+- Tests: 199 pass on SQLite.
