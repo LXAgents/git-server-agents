@@ -1,7 +1,7 @@
 ---
 name: agent-read-references
 description: Task record for letting the agent read the issues, pull requests, PR diffs and commits a comment mentions (server 1.16.0).
-status: in progress
+status: done
 ---
 
 # The agent reads mentioned issues, pull requests, diffs and commits
@@ -16,9 +16,9 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/agent-read-references` | `.agents/` | |
-| 2 | Read tools | Mention parsing, read tools, platform calls, tests, docs | git-server-agents | `feat/read-references` | `src/services/agent/`, `src/services/platforms/`, `src/services/eventService.js`, `test/`, `wiki/` | |
-| 3 | Release | 1.16.0 changelog and version | git-server-agents | `release/1.16.0` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/agent-read-references` | `.agents/` | #78 |
+| 2 | Read tools | Mention parsing, read tools, platform calls, tests, docs | git-server-agents | `feat/read-references` | `src/services/agent/`, `src/services/platforms/`, `src/services/eventService.js`, `test/`, `wiki/` | #79 |
+| 3 | Release | 1.16.0 changelog and version | git-server-agents | `release/1.16.0` | `package.json`, `wiki/logs/` | #80 |
 
 ### Task 1 — plan/agent-read-references
 
@@ -30,3 +30,7 @@ This record was written before the work. Nothing else changed.
 - `agent/threadReader.js`: `read_issue` (a GitHub PR number is read as a PR), `read_pull_request` (with diff), `list_commits` (this PR without a mention), `read_commit` (sha from a listing, the comment, or this PR's commits, fetched lazily). Anything not mentioned is refused with an `Error:` the model sees.
 - Platform calls: GitHub `getIssue`, `getPullByNumber`, `listPullCommits`, `getCommit`; GitLab `getIssue`, `getMergeRequest`, `listMergeRequestCommits`, `getCommit`. `toComment` now carries GitLab's `repoPath` for link matching.
 - Read tools are offered to every commenter (read-only, same repository). Tests: 197 pass on SQLite.
+
+### Task 3 — release/1.16.0
+
+Version 1.16.0, the changelog at `wiki/logs/1/16/0/CHANGELOG.md` and its index row. The PR column is filled in.
