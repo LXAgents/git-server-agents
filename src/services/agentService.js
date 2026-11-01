@@ -8,7 +8,8 @@ const repoStore = require('./repoStore');
 const github = require('./githubService');
 const gitlab = require('./gitlabService');
 const keys = require('./keyService');
-const openRouter = require('./openRouterService');
+const llm = require('./llmService');
+const { findProvider } = require('./providers');
 const { AgentError, formatReply } = require('./agentErrors');
 const { TOOLS, createRepoTools } = require('./repoTools');
 const { logSafe } = require('../utils/strings');
@@ -46,7 +47,7 @@ function buildSystemPrompt(comment, diff, { tools = false } = {}) {
 // The footer is found with lastIndexOf and checked with an anchored pattern, so the work stays
 // linear on any comment body.
 const FOOTER_START = '<sub>Model: `';
-const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Cost|User): `[^`]*`<\/sub>){0,2}\s*$/;
+const FOOTER = /^<sub>Model: `[^`]*`<\/sub>(?:\s*<sub>(?:Provider|Cost|User): `[^`]*`<\/sub>){0,3}\s*$/;
 function stripReply(body) {
   const text = removeMarkers(body).trim();
   const start = text.lastIndexOf(FOOTER_START);
@@ -106,8 +107,8 @@ async function chatWithFallback(candidates, attempt, logMeta) {
   throw lastError;
 }
 
-// OpenRouter answers 404 "No endpoints found that support tool use" (or a 400 naming tools)
-// when the chosen model cannot call tools.
+// OpenRouter answers 404 "No endpoints found that support tool use", and other providers a 400
+// naming tools, when the chosen model cannot call tools.
 function toolsUnsupported(err) {
   const status = err.response && err.response.status;
   if (status !== 400 && status !== 404) return false;
@@ -137,7 +138,7 @@ function formatCost(spend) {
 // The error for an answer that ran out of its TASK_TIMEOUT_MS.
 function deadlineError(limitMs) {
   const err = new Error(`the answer took longer than ${limitMs}ms`);
-  err.source = 'openrouter';
+  err.source = 'provider';
   err.code = 'ETIMEDOUT';
   err.deadline = limitMs;
   return err;
@@ -151,7 +152,7 @@ async function timedCall(request, apiKey, messages, tools) {
   const started = Date.now();
   const { deadline: _d, limitMs: _l, label: _n, logMeta: _m, spend, ...body } = request;
   try {
-    const reply = await openRouter.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
+    const reply = await llm.complete({ ...body, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
     if (spend) addCost(spend, reply.cost);
     log.info('agent', `${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`, logMeta);
     return reply;
@@ -177,10 +178,14 @@ async function converse({ request, apiKey, system, history, question, repo }) {
         const reply = await call(messages, TOOLS);
         const toolCalls = reply.tool_calls || [];
         if (toolCalls.length === 0 || round === MAX_TOOL_ROUNDS) {
-          if (!reply.content) throw openRouter.emptyError(request.model);
+          if (!reply.content) throw llm.emptyError(request.model);
           return reply.content;
         }
-        messages.push({ role: 'assistant', content: reply.content || '', tool_calls: toolCalls });
+        // providerContent is the provider's own reply (Anthropic's content blocks), sent back
+        // unchanged on the next round; other providers ignore it.
+        const turn = { role: 'assistant', content: reply.content || '', tool_calls: toolCalls };
+        if (reply.providerContent) turn.providerContent = reply.providerContent;
+        messages.push(turn);
         for (const toolCall of toolCalls) {
           const fn = toolCall.function || {};
           messages.push({ role: 'tool', tool_call_id: toolCall.id, content: await repo.run(fn.name, fn.arguments) });
@@ -196,13 +201,13 @@ async function converse({ request, apiKey, system, history, question, repo }) {
         { role: 'user', content: question },
       ];
       const reply = await call(plain);
-      if (!reply.content) throw openRouter.emptyError(request.model);
+      if (!reply.content) throw llm.emptyError(request.model);
       return reply.content;
     }
   }
 
   const reply = await call(messages);
-  if (!reply.content) throw openRouter.emptyError(request.model);
+  if (!reply.content) throw llm.emptyError(request.model);
   return reply.content;
 }
 
@@ -302,24 +307,33 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     history = await gitlab.listNotes(comment.projectId, comment.kind, comment.number);
   }
 
+  // The agent answers text today; other modalities get their own trigger later.
+  const modality = 'text';
   const account = { type: task.platform, id: identity.triggerUserId };
   const repository = await repoStore.findForEvent(task.platform, payload, access.installation);
-  const model = parsed.model || (await models.resolveModel({ repository, installation: access.installation, account })).model;
+  // "@vendor/model" names an OpenRouter model; "@agents" uses the stored provider and model.
+  const chosen = parsed.model
+    ? { provider: 'openrouter', model: parsed.model }
+    : await models.resolveModel({ repository, installation: access.installation, account }, modality);
+  const { model } = chosen;
+  const providerInfo = findProvider(chosen.provider);
+  if (!providerInfo) throw new AgentError('BAD_REQUEST', `The stored provider ${chosen.provider} is not supported. Pick another one on the dashboard.`);
   ctx.model = model;
 
   const member = await isOrgMember(task.platform, identity, payload, token);
   const repoMember = repository ? await isRepoMember(task.platform, identity, comment, member, token) : false;
   const { provider, keys: candidates } = await keys.getProviderKeys(
-    config.ai.providerName,
+    providerInfo.slug,
     account,
     member ? access.installation : null,
     repoMember ? repository : null
   );
+  // Strict BYOK: the server has no key of its own, so no allowed key means no model call.
   if (candidates.length === 0) {
     const orgNote = member ? `, the repository or ${identity.targetOrg}` : ` (repository and org keys need membership of ${identity.targetOrg})`;
     throw new AgentError(
       'NO_API_KEY',
-      `No active ${config.ai.providerName} key for you${orgNote}. Log in to the dashboard with ${PLATFORM_NAMES[task.platform]} and add your own key.`
+      `No active ${providerInfo.name} key for you${orgNote}. Log in to the dashboard with ${PLATFORM_NAMES[task.platform]} and add your own ${providerInfo.name} key.`
     );
   }
 
@@ -328,7 +342,8 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     ? createRepoTools({ platform: task.platform, repo: comment.repo, projectId: comment.projectId, ref, token })
     : null;
   const request = {
-    baseUrl: provider.url || 'https://openrouter.ai/api/v1',
+    provider: providerInfo.slug,
+    baseUrl: provider.url || providerInfo.url(),
     model,
     deadline: ctx.started + config.ai.taskTimeoutMs,
     limitMs: config.ai.taskTimeoutMs,
@@ -336,7 +351,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     logMeta: { platform: task.platform, taskId: task.id },
     spend: { cost: 0, complete: true },
   };
-  log.info('agent', `task ${task.id}: asking ${logSafe(model)} with ${candidates.length} key(s)`, request.logMeta);
+  log.info('agent', `task ${task.id}: asking ${providerInfo.name} ${logSafe(model)} with ${candidates.length} key(s)`, request.logMeta);
   const answer = await chatWithFallback(candidates, (key) =>
     converse({
       request,
@@ -353,6 +368,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
   const asker = String(comment.author || identity.triggerUser || 'unknown').replaceAll('`', '');
   const footer = [
     `<sub>Model: \`${model}\`</sub>`,
+    `<sub>Provider: \`${providerInfo.name}\`</sub>`,
     `<sub>Cost: \`${formatCost(request.spend)}\`</sub>`,
     `<sub>User: \`@${asker}\`</sub>`,
   ].join('\n');

@@ -1,18 +1,25 @@
-// Inserts OpenRouter as the default AI provider. Safe to run repeatedly.
+// Inserts the five AI providers (OpenRouter, OpenAI, Anthropic, DeepSeek, z.ai) with their API
+// base URLs. Safe to run repeatedly. No key is seeded: every key is brought by a user, an org
+// or a repo.
 const prisma = require('../src/db');
+const { PROVIDERS } = require('../src/services/providers');
 
-const OPENROUTER = {
-  displayName: 'OpenRouter',
-  url: 'https://openrouter.ai/api/v1',
-};
+async function upsertProvider(p) {
+  const data = { slug: p.slug, displayName: p.name, url: p.url() };
+  // Rows from before 1.13.0 have no slug; the first run finds them by name and fills it in.
+  const existing =
+    (await prisma.provider.findFirst({ where: { slug: p.slug } })) ||
+    (await prisma.provider.findFirst({ where: { slug: null, displayName: p.name } }));
+  return existing
+    ? prisma.provider.update({ where: { id: existing.id }, data })
+    : prisma.provider.create({ data });
+}
 
 async function main() {
-  // displayName is not unique in the schema, so upsert by looking the row up first.
-  const existing = await prisma.provider.findFirst({ where: { displayName: OPENROUTER.displayName } });
-  const provider = existing
-    ? await prisma.provider.update({ where: { id: existing.id }, data: { url: OPENROUTER.url } })
-    : await prisma.provider.create({ data: OPENROUTER });
-  console.log(`[seed] provider ${provider.displayName} (${provider.id}) -> ${provider.url}`);
+  for (const p of PROVIDERS) {
+    const provider = await upsertProvider(p);
+    console.log(`[seed] provider ${provider.displayName} (${provider.slug}) -> ${provider.url}`);
+  }
 }
 
 main()

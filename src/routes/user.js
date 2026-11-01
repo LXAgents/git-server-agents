@@ -9,7 +9,9 @@ router.use(userAuth);
 
 router.get('/me', user.me);
 
-// Model ids from OpenRouter, and the model each owner picked per modality.
+// The AI providers, each provider's live model ids, and the provider and model each owner
+// picked per modality.
+router.get('/providers', user.listAiProviders);
 router.get('/models', user.listModels);
 router.get('/models/settings', user.getOwnModels);
 router.put('/models/settings', user.setOwnModel);

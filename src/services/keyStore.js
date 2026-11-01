@@ -3,6 +3,8 @@
 const prisma = require('../db');
 const { encrypt, decrypt } = require('./cryptoService');
 const { HttpError } = require('../errors');
+const { findProvider, providerParam } = require('./providers');
+const { findProviderRow } = require('./keyService');
 
 const include = { provider: true, appInstallation: true, account: true, repository: true };
 
@@ -27,6 +29,7 @@ function toView(row) {
     id: row.id,
     owner,
     provider: row.provider.displayName,
+    providerSlug: row.provider.slug || (findProvider(row.provider.displayName) || {}).slug || null,
     priority: row.priority,
     isActive: row.isActive,
     last4: last4(row),
@@ -39,11 +42,13 @@ async function listKeys(where = {}) {
   return rows.map(toView);
 }
 
-// `owner` is { accountType, accountId }, { appInstallationId } or { repositoryId }.
-async function createKey(owner, { apiKey, priority, provider = 'OpenRouter' }) {
+// `owner` is { accountType, accountId }, { appInstallationId } or { repositoryId }. `provider` is
+// a slug such as "openai" (or a display name); left out, it is OpenRouter as before 1.13.0.
+async function createKey(owner, { apiKey, priority, provider } = {}) {
   if (typeof apiKey !== 'string' || !apiKey.trim()) throw new HttpError(400, 'apiKey is required');
-  const providerRow = await prisma.provider.findFirst({ where: { displayName: provider } });
-  if (!providerRow) throw new HttpError(400, `unknown provider ${provider}`);
+  const known = providerParam(provider);
+  const providerRow = await findProviderRow(known.slug);
+  if (!providerRow) throw new HttpError(400, `provider ${known.slug} is not set up on the server; run npm run db:seed`);
   const row = await prisma.accountKey.create({
     data: {
       ...owner,

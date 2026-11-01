@@ -18,6 +18,8 @@ router.delete('/orgs/:id', admin.deleteOrg);
 router.get('/repos', admin.listRepos);
 router.delete('/repos/:id', admin.deleteRepo);
 
+router.get('/providers', admin.providers);
+
 router.get('/keys', admin.listKeys);
 router.post('/keys', admin.createKey);
 router.delete('/keys/:id', admin.deleteKey);

@@ -47,11 +47,19 @@ module.exports = {
     ownerId: ownerId('GITLAB_ADMIN_ID'),
   },
   ai: {
-    // What "@agents" uses when no repo, org or user model is set.
+    // What "@agents" uses when no repo, org or user model is set. The server has no key of its
+    // own for any provider: the commenter, org or repo still needs a key for this provider.
+    defaultProvider: String(process.env.DEFAULT_PROVIDER || 'openrouter').toLowerCase(),
     defaultModel: process.env.DEFAULT_MODEL || 'openrouter/free',
-    // Where the dashboard's model list comes from.
+    // Each provider's API base URL; the seed stores them in the Provider table.
     openRouterUrl: trimSlash(process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1'),
-    providerName: 'OpenRouter',
+    openAiUrl: trimSlash(process.env.OPENAI_API_URL || 'https://api.openai.com/v1'),
+    anthropicUrl: trimSlash(process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com'),
+    deepSeekUrl: trimSlash(process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com'),
+    // https://open.bigmodel.cn/api/paas/v4 for the mainland China endpoint.
+    zaiUrl: trimSlash(process.env.ZAI_API_URL || 'https://api.z.ai/api/paas/v4'),
+    // The longest answer a provider may write (Anthropic requires a limit on every call).
+    maxOutputTokens: Number(process.env.MAX_OUTPUT_TOKENS) || 16000,
     maxDiffChars: Number(process.env.MAX_DIFF_CHARS) || 100000,
     // One model call, and one whole answer (every call, tool and key together).
     modelTimeoutMs: Number(process.env.MODEL_TIMEOUT_MS) || 60_000,

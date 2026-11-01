@@ -20,13 +20,20 @@ model Account {
   @@id([type, id])
 }
 
+// One AI provider (OpenRouter, OpenAI, Anthropic, DeepSeek, z.ai), seeded by prisma/seed.js.
+// slug is the name the API uses ("openai"). It is optional and not unique in the schema only
+// so `db push` works on databases from before 1.13.0 without --accept-data-loss; the seed fills
+// it and keeps one row per slug.
 model Provider {
   id          String       @id @default(cuid())
+  slug        String?
   displayName String
   url         String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   keys        AccountKey[]
+
+  @@index([slug])
 }
 
 model AccountKey {
@@ -86,11 +93,12 @@ model Repository {
   @@index([appInstallationId])
 }
 
-// The model a user, org or repo picks for one modality (text, image, ...). Exactly one owner
-// is set.
+// The provider and model a user, org or repo picks for one modality (text, image, ...).
+// Exactly one owner is set. provider is a Provider slug; rows from before 1.13.0 are OpenRouter.
 model ModelSetting {
   id                String           @id @default(cuid())
   modality          String
+  provider          String           @default("openrouter")
   model             String
   accountType       String?
   accountId         String?

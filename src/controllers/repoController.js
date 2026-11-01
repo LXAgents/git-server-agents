@@ -109,4 +109,5 @@ module.exports = {
   deleteRepoKey,
   getRepoModels,
   setRepoModel,
+  requireRepoAdmin,
 };

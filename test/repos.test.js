@@ -93,8 +93,8 @@ test('imports a repo only for its admin, and checks admin rights on every change
   assert.equal((await call('PUT', `/repos/${repo.id}/models`, { token: 'gh-bob', body: { modality: 'text', model: 'openai/gpt-5' } })).status, 403);
 
   const set = await call('PUT', `/repos/${repo.id}/models`, { token: 'gh-alice', body: { modality: 'text', model: 'openai/gpt-5' } });
-  assert.deepEqual(await set.json(), { text: 'openai/gpt-5' });
-  assert.deepEqual((await json(await call('GET', '/repos', { token: 'gh-alice' })))[0].models, { text: 'openai/gpt-5' });
+  assert.deepEqual(await set.json(), { text: { provider: 'openrouter', model: 'openai/gpt-5' } });
+  assert.deepEqual((await json(await call('GET', '/repos', { token: 'gh-alice' })))[0].models, { text: { provider: 'openrouter', model: 'openai/gpt-5' } });
 
   assert.equal((await call('DELETE', `/repos/${repo.id}`, { token: 'gh-bob' })).status, 403);
   assert.equal((await call('DELETE', `/repos/${repo.id}`, { token: 'gh-alice' })).status, 204);

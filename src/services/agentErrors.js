@@ -12,11 +12,11 @@ class AgentError extends Error {
 
 const CODES = {
   NO_QUESTION: { title: 'No question to answer', retry: 'Add your question after the trigger, on the same line or the next ones.' },
-  NO_API_KEY: { title: 'No API key to use', retry: 'Retrying will not help. Add an OpenRouter key on the dashboard’s API keys page first.' },
+  NO_API_KEY: { title: 'No API key to use', retry: 'Retrying will not help. Add a key for that provider on the dashboard’s API keys page first.' },
   INVALID_API_KEY: { title: 'The API key was refused', retry: 'Retrying will not help. Replace the key on the dashboard: it is invalid, revoked or disabled.' },
-  INSUFFICIENT_CREDITS: { title: 'The API key is out of credits', retry: 'Retrying will not help. Add credits at openrouter.ai/settings/credits, or use a `:free` model.' },
+  INSUFFICIENT_CREDITS: { title: 'The API key is out of credits', retry: 'Retrying will not help. Add credits with the provider (openrouter.ai/settings/credits for OpenRouter), or use a free model.' },
   RATE_LIMITED: { title: 'Rate limit reached', retry: 'Wait before retrying; asking again right away fails the same way.' },
-  MODEL_NOT_FOUND: { title: 'The model was not found', retry: 'Retrying will not help. Check the model id at openrouter.ai/models.' },
+  MODEL_NOT_FOUND: { title: 'The model was not found', retry: 'Retrying will not help. Check the model id in the dashboard’s model list for that provider.' },
   BAD_REQUEST: { title: 'The request was rejected', retry: 'Retrying will not help. Try another model, or a shorter question.' },
   CONTENT_FLAGGED: { title: 'The request was refused by moderation', retry: 'Retrying will not help. Rephrase the question, or try another model.' },
   TIMEOUT: { title: 'The model took too long', retry: 'Retry once; if it times out again, pick a faster model.' },
@@ -79,12 +79,13 @@ function codeForProviderStatus(status, message) {
 
 const TIMEOUT_CODES = new Set(['ECONNABORTED', 'ETIMEDOUT', 'ESOCKETTIMEDOUT']);
 
-// One classified failure. `quoted` marks text that came from OpenRouter or the platform.
+// One classified failure. `quoted` marks text that came from the AI provider or the platform.
 function result(code, status, detail, { quoted = false, note = '', resetAt = null } = {}) {
   return { code, status, ...CODES[code], detail, quoted, note, resetAt };
 }
 
 function classifyProvider(e, now) {
+  const name = e.providerName || 'OpenRouter';
   const response = e.response;
   if (!response) {
     if (e.deadline) return result('TIMEOUT', null, `The answer took longer than ${Math.round(e.deadline / 1000)} seconds, the limit for one comment.`);
@@ -92,7 +93,7 @@ function classifyProvider(e, now) {
       const ms = e.config && e.config.timeout;
       return result('TIMEOUT', null, ms ? `No answer within ${Math.round(ms / 1000)} seconds.` : 'The model did not answer in time.');
     }
-    return result('PROVIDER_UNAVAILABLE', null, 'OpenRouter could not be reached.');
+    return result('PROVIDER_UNAVAILABLE', null, `${name} could not be reached.`);
   }
   const message = providerMessage(response.data);
   const code = codeForProviderStatus(response.status, message);
@@ -102,7 +103,7 @@ function classifyProvider(e, now) {
       ? 'The daily limit for free models on this key is used up. It resets at 00:00 UTC, and adding credits raises it.'
       : '';
   const detail = quote(message);
-  if (!detail) return result(code, response.status, `OpenRouter answered HTTP ${response.status}.`, { note, resetAt });
+  if (!detail) return result(code, response.status, `${name} answered HTTP ${response.status}.`, { note, resetAt });
   return result(code, response.status, detail, { quoted: true, note, resetAt });
 }
 
@@ -110,7 +111,7 @@ function classifyProvider(e, now) {
 function classify(err, now = Date.now()) {
   const e = err || {};
   if (e instanceof AgentError) return result(e.code, null, e.message);
-  if (e.source === 'openrouter') return classifyProvider(e, now);
+  if (e.source === 'openrouter' || e.source === 'provider') return classifyProvider(e, now);
   if (e.source === 'empty') return result('EMPTY_RESPONSE', null, 'The model returned no text.');
   const response = e.response;
   if (response && response.status) {
