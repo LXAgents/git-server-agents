@@ -18,11 +18,11 @@ const githubInstallations = { 'orgs/acme': 555, 'users/alice': 777 };
 // login -> repos the user can see, with their admin flag
 const githubRepos = {
   alice: [
-    { id: 301, full_name: 'acme/web', owner: { login: 'acme' }, permissions: { admin: true } },
-    { id: 302, full_name: 'acme/docs', owner: { login: 'acme' }, permissions: { admin: false } },
-    { id: 303, full_name: 'beta/app', owner: { login: 'beta' }, permissions: { admin: true } },
+    { id: 301, full_name: 'acme/web', owner: { login: 'acme' }, default_branch: 'main', permissions: { admin: true, push: true, pull: true } },
+    { id: 302, full_name: 'acme/docs', owner: { login: 'acme' }, permissions: { admin: false, pull: true } },
+    { id: 303, full_name: 'beta/app', owner: { login: 'beta' }, permissions: { admin: true, push: true, pull: true } },
   ],
-  bob: [{ id: 301, full_name: 'acme/web', owner: { login: 'acme' }, permissions: { admin: false } }],
+  bob: [{ id: 301, full_name: 'acme/web', owner: { login: 'acme' }, default_branch: 'main', permissions: { admin: false, pull: true } }],
 };
 // GitLab project id -> path and user id -> access level
 const gitlabProjects = { 41: { path: 'grp/app', members: { 7: 50, 8: 30 } } };
