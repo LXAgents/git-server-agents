@@ -16,6 +16,7 @@ model Account {
   keys          AccountKey[]
   installations AppInstallation[]
   models        ModelSetting[]
+  workspaceKeys WorkspaceKey[]
 
   @@id([type, id])
 }
@@ -58,6 +59,31 @@ model AccountKey {
   @@index([repositoryId])
 }
 
+// A token for a development-environment provider (today only "github_codespaces": a GitHub
+// personal access token with the codespace scope), brought by a user, an org or a repository
+// like AccountKey. Exactly one owner is set. The token is stored encrypted (cryptoService) and
+// decrypted only at the moment the agent calls the provider.
+model WorkspaceKey {
+  id                String           @id @default(cuid())
+  provider          String
+  tokenEncrypted    String
+  priority          Int              @default(0)
+  isActive          Boolean          @default(true)
+  accountType       String?
+  accountId         String?
+  appInstallationId String?
+  repositoryId      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  account           Account?         @relation(fields: [accountType, accountId], references: [type, id], onDelete: Cascade)
+  appInstallation   AppInstallation? @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+  repository        Repository?      @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId])
+  @@index([appInstallationId])
+  @@index([accountType, accountId])
+}
+
 model AppInstallation {
   id             String       @id @default(cuid())
   platform       String
@@ -71,6 +97,7 @@ model AppInstallation {
   keys           AccountKey[]
   repositories   Repository[]
   models         ModelSetting[]
+  workspaceKeys  WorkspaceKey[]
 
   @@unique([platform, orgName])
 }
@@ -88,6 +115,7 @@ model Repository {
   appInstallation   AppInstallation @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
   keys              AccountKey[]
   models            ModelSetting[]
+  workspaceKeys     WorkspaceKey[]
 
   @@unique([platform, externalId])
   @@index([appInstallationId])
