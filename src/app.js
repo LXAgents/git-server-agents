@@ -3,6 +3,7 @@ const webhooks = require('./routes/webhooks');
 const admin = require('./routes/admin');
 const user = require('./routes/user');
 const auth = require('./routes/auth');
+const chat = require('./routes/chat');
 const { cors } = require('./middleware/cors');
 const { HttpError } = require('./errors');
 const log = require('./services/logService');
@@ -32,6 +33,7 @@ function createApp() {
   app.use('/api/auth', cors, auth);
   app.use('/api/admin', cors, admin);
   app.use('/api/user', cors, user);
+  app.use('/api/chat', cors, chat);
 
   app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
   // eslint-disable-next-line no-unused-vars

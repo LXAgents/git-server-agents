@@ -50,3 +50,12 @@ This record was written before the work. Nothing else changed.
 - Offered when the platform adapter has `workspaces: true` (GitHub), the commenter passes `canManage`, and `findWorkspaceKeys` finds a key with the same membership rules as AI keys. Such answers use `WORKSPACE_TASK_TIMEOUT_MS`.
 - `agentErrors.js`: `NO_WORKSPACE_KEY`, `WORKSPACE_ERROR`, `WORKSPACE_UNAVAILABLE`. Tool guide explains the tools.
 - Tests: `test/workspaceTools.test.js`. Docs: asking-the-agent, code layout.
+
+### Task 5 — feat/chat
+
+- owen added his `chat_sessions` / `chat_messages` tables on 2026-11-01 ("make it fit to our project"): `ChatSession` (cuid, `room`, `title` default "New Chat", `createdBy`, timestamps; index `[room, updatedAt]`) and `ChatMessage` (cuid, `sessionId` with cascade, `role` user/assistant, `type` message/report, sender id/login, `content`; index `[sessionId, createdAt]`). cuid ids instead of VARCHAR(36)/INTEGER to match every other table.
+- `services/chat/`: `rooms.js` (parse and authorize `user:`/`repo:`/`org:`; user room keys carry the platform), `chatStore.js` (sessions, messages, "Agent activity" session), `bus.js` (in-process pub/sub), `events.js` (the event shape), `index.js` (`emit`, `broadcaster`), `chatAgent.js` (answers in the room with the room's model and keys; repo rooms get read tools at the default branch and, for writers on GitHub with a key, the workspace tools; one answer per session at a time).
+- `platformService.repoAccess` (admin/write/read/none + default branch, from the user's token) and `platformService.isOrgMember`.
+- `/api/chat` routes (rooms, sessions, messages, stream); PATCH added to CORS methods. The stream re-checks access every 5 minutes.
+- Mock platform repos now carry `pull`/`push` and `default_branch`.
+- Tests: `test/chat.test.js`. Docs: `wiki/guides/chat.md` (indexed), API reference, code layout.
