@@ -2,7 +2,7 @@
 // base URLs. Safe to run repeatedly. No key is seeded: every key is brought by a user, an org
 // or a repo.
 const prisma = require('../src/db');
-const { PROVIDERS } = require('../src/services/providers');
+const { PROVIDERS } = require('../src/services/ai/providers');
 
 async function upsertProvider(p) {
   const data = { slug: p.slug, displayName: p.name, url: p.url() };

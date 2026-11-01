@@ -64,8 +64,8 @@ test.before(async () => {
   process.env.GITHUB_API_URL = `${base}/gh`;
   process.env.GITLAB_API_URL = `${base}/gl`;
   process.env.GITLAB_TOKEN = 'bot-token';
-  github = require('../src/services/githubService');
-  gitlab = require('../src/services/gitlabService');
+  github = require('../src/services/platforms/githubService');
+  gitlab = require('../src/services/platforms/gitlabService');
 });
 
 test.after(() => server.close());

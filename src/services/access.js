@@ -1,7 +1,7 @@
 // Live ownership checks for a signed-in user. Every org or repository request asks the
 // platform again: the answer is never stored.
 const prisma = require('../db');
-const platforms = require('./platformService');
+const platforms = require('./platforms/platformService');
 const { HttpError } = require('../errors');
 
 // The imported org `id`, if `user` owns it on its platform right now: 404 if unknown, 403 if not theirs.

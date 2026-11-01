@@ -1,10 +1,10 @@
 // Asks GitHub or GitLab, with the signed-in user's own token, who the user is and what they
 // own. Nothing here is cached or stored: roles are checked live on every org change.
 const axios = require('axios');
-require('../http');
-const config = require('../config');
+require('../../http');
+const config = require('../../config');
 const github = require('./githubService');
-const { HttpError } = require('../errors');
+const { HttpError } = require('../../errors');
 
 const PLATFORMS = ['github', 'gitlab'];
 const GITLAB_OWNER = 50;

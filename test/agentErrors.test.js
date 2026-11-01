@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const axios = require('axios');
 
 const { AgentError, classify, formatReply, resetTime } = require('../src/services/agentErrors');
-const openRouter = require('../src/services/openRouterService');
+const openRouter = require('../src/services/ai/openRouterService');
 
 function providerError(status, message, headers = {}) {
   const err = new Error(`Request failed with status code ${status}`);

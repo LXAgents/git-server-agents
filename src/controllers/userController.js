@@ -3,11 +3,11 @@
 // whether the user owns that org; the answer is never stored.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
-const models = require('../services/modelService');
+const models = require('../services/ai/modelService');
 const keyService = require('../services/keyService');
-const { providerParam, listProviders } = require('../services/providers');
+const { providerParam, listProviders } = require('../services/ai/providers');
 const access = require('../services/access');
-const platforms = require('../services/platformService');
+const platforms = require('../services/platforms/platformService');
 const { orgViews, nameUserOwners } = require('../services/views');
 const { HttpError } = require('../errors');
 

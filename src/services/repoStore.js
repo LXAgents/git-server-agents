@@ -1,6 +1,6 @@
 // Imported repositories (GitHub) and projects (GitLab), as the agent and the APIs see them.
 const prisma = require('../db');
-const { settingsMap } = require('./modelService');
+const { settingsMap } = require('./ai/modelService');
 
 // The repository a webhook event came from, if one of its admins added it, and only when it
 // sits in the org the event was whitelisted under.

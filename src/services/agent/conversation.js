@@ -1,7 +1,7 @@
 // One answer's model calls: the tool loop, the plain fallback for models without tools, and
 // the deadline every call shares.
 const config = require('../../config');
-const llm = require('../llmService');
+const llm = require('../ai/llmService');
 const { TOOLS } = require('./repoTools');
 const { addCost } = require('./cost');
 const { logSafe } = require('../../utils/strings');

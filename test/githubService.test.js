@@ -6,7 +6,7 @@ const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLen
 process.env.GITHUB_CLIENT_ID = 'Iv23liExample';
 process.env.GITHUB_PRIVATE_KEY = privateKey.export({ type: 'pkcs1', format: 'pem' }).replace(/\n/g, '\\n');
 
-const { appJwt } = require('../src/services/githubService');
+const { appJwt } = require('../src/services/platforms/githubService');
 
 test('signs a GitHub App JWT, issued by the client ID, that verifies with the public key', () => {
   const now = 1_700_000_000;

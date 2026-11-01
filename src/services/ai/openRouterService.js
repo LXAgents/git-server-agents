@@ -1,5 +1,5 @@
 const axios = require('axios');
-const config = require('../config');
+const config = require('../../config');
 
 // An HTTP-shaped error for a failure OpenRouter reports inside a 200 response.
 function bodyError(status, error) {

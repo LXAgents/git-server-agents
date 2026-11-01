@@ -40,7 +40,7 @@ function splitFlags(args) {
 
 async function createKey(owner, apiKey, priority, providerName) {
   required(apiKey, 'apiKey');
-  // A slug such as "openai" or a display name; see src/services/providers.js.
+  // A slug such as "openai" or a display name; see src/services/ai/providers.js.
   const provider = await findProviderRow(providerName);
   if (!provider) throw new Error(`provider ${providerName} not found (openrouter, openai, anthropic, deepseek, zai); run npm run db:seed`);
   return prisma.accountKey.create({

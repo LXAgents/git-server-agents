@@ -1,7 +1,7 @@
 // Who a user is (login, display name, avatar) comes from GitHub or GitLab, never from our
 // database. Answers are kept in memory for a short while so a page of users doesn't call the
 // platform once per row on every load.
-const platforms = require('./platformService');
+const platforms = require('./platforms/platformService');
 
 const TTL_MS = 10 * 60 * 1000;
 const cache = new Map();

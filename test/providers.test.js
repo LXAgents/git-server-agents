@@ -11,9 +11,9 @@ let agentErrors;
 
 test.before(async () => {
   mock = await startMockPlatform();
-  llm = require('../src/services/llmService');
-  anthropic = require('../src/services/anthropicService');
-  providers = require('../src/services/providers');
+  llm = require('../src/services/ai/llmService');
+  anthropic = require('../src/services/ai/anthropicService');
+  providers = require('../src/services/ai/providers');
   agentErrors = require('../src/services/agentErrors');
 });
 

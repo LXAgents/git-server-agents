@@ -3,8 +3,8 @@
 // change asks the platform again whether the user still administers it.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
-const models = require('../services/modelService');
-const platforms = require('../services/platformService');
+const models = require('../services/ai/modelService');
+const platforms = require('../services/platforms/platformService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const access = require('../services/access');
 const { HttpError } = require('../errors');

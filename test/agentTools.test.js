@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const openRouter = require('../src/services/openRouterService');
-const github = require('../src/services/githubService');
+const openRouter = require('../src/services/ai/openRouterService');
+const github = require('../src/services/platforms/githubService');
 const { converse } = require('../src/services/agentService');
 const { createRepoTools, MAX_FILE_CHARS } = require('../src/services/agent/repoTools');
 

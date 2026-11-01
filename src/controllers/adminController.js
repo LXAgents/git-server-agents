@@ -4,11 +4,11 @@
 // rows from the other platform are neither listed nor changed.
 const prisma = require('../db');
 const keyStore = require('../services/keyStore');
-const { listProviders } = require('../services/providers');
+const { listProviders } = require('../services/ai/providers');
 const profiles = require('../services/profileService');
 const { repoView, viewInclude } = require('../services/repoStore');
 const { orgViews, nameUserOwners } = require('../services/views');
-const { PLATFORMS } = require('../services/platformService');
+const { PLATFORMS } = require('../services/platforms/platformService');
 const owners = require('../services/ownerService');
 const { FREE } = require('../services/roles');
 const { HttpError } = require('../errors');

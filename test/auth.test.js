@@ -18,7 +18,7 @@ let oauth;
 test.before(async () => {
   mock = await startMockPlatform();
   prisma = require('../src/db');
-  oauth = require('../src/services/oauthService');
+  oauth = require('../src/services/platforms/oauthService');
   const { createApp } = require('../src/app');
   server = createApp().listen(0);
   base = `http://127.0.0.1:${server.address().port}`;

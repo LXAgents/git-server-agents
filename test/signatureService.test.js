@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('crypto');
-const { verifyGithubSignature, verifyGitlabToken } = require('../src/services/signatureService');
+const { verifyGithubSignature, verifyGitlabToken } = require('../src/services/platforms/signatureService');
 
 const body = Buffer.from('{"hello":"world"}');
 const sign = (secret) => `sha256=${crypto.createHmac('sha256', secret).update(body).digest('hex')}`;

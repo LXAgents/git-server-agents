@@ -1,7 +1,7 @@
 // API views shared by the owner and user endpoints. Logins, names and avatars are read from
 // the platform for each request, never stored.
 const profiles = require('./profileService');
-const { settingsMap } = require('./modelService');
+const { settingsMap } = require('./ai/modelService');
 
 function orgView(o, ownerProfile) {
   return {

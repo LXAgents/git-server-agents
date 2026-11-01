@@ -3,10 +3,10 @@
 // whitelist and the live owner checks stay where they are.
 const crypto = require('crypto');
 const axios = require('axios');
-require('../http');
-const config = require('../config');
-const { HttpError } = require('../errors');
-const { encrypt, decrypt } = require('./cryptoService');
+require('../../http');
+const config = require('../../config');
+const { HttpError } = require('../../errors');
+const { encrypt, decrypt } = require('../cryptoService');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const CODE_TTL_MS = 60 * 1000;

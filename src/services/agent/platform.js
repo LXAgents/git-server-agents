@@ -1,8 +1,8 @@
 // Everything the agent asks GitHub or GitLab, behind one shape per platform, so the agent's
 // flow never branches on the platform. `c` is the comment from eventService.toComment.
-const github = require('../githubService');
-const gitlab = require('../gitlabService');
-const { githubIdentity, gitlabIdentity } = require('../identityService');
+const github = require('../platforms/githubService');
+const gitlab = require('../platforms/gitlabService');
+const { githubIdentity, gitlabIdentity } = require('../platforms/identityService');
 
 // Who owns the GitHub repository the webhook came from: { id, type }.
 function githubAccount(payload) {
