@@ -11,6 +11,7 @@
   GitHub App installation for every org at once.
 - **No controller imports another.** Ownership checks are in `services/access.js` and shared
   views in `services/views.js`.
+- **GitHub App installations are read from the App's own list** (`GET /app/installations`) instead of one URL per account name. This answers org import with one list and clears a SonarCloud request forgery finding.
 - **Grouped services.** AI code is under `services/ai/` and GitHub/GitLab code under
   `services/platforms/`.
 
