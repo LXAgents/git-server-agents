@@ -1,10 +1,8 @@
 // Read-only access to the repository the comment was made in, through the GitHub or GitLab
 // REST APIs (never a clone). The model reaches it through two tools; models without tool
 // support get the same context added to the prompt instead.
-const { trimTrailingSlashes } = require('../utils/strings');
-
-const github = require('./githubService');
-const gitlab = require('./gitlabService');
+const { trimTrailingSlashes } = require('../../utils/strings');
+const { platformOf } = require('./platform');
 
 const MAX_FILE_CHARS = 40_000;
 const MAX_TREE_PATHS = 2_000;
@@ -46,14 +44,12 @@ function cleanPath(path) {
 
 // `source` is { platform, repo, projectId, ref, token }.
 function createRepoTools(source) {
+  const api = platformOf(source.platform);
   let treePromise = null;
 
   const tree = () => {
     if (!treePromise) {
-      treePromise =
-        source.platform === 'github'
-          ? github.getRepoTree(source.repo, source.ref, source.token)
-          : gitlab.getRepoTree(source.projectId, source.ref);
+      treePromise = api.getRepoTree(source);
     }
     return treePromise;
   };
@@ -73,10 +69,7 @@ function createRepoTools(source) {
   async function readFile(path) {
     const clean = cleanPath(path);
     if (!clean) return 'Error: a file path is required.';
-    const content =
-      source.platform === 'github'
-        ? await github.getFileContent(source.repo, clean, source.ref, source.token)
-        : await gitlab.getFileContent(source.projectId, clean, source.ref);
+    const content = await api.getFileContent(source, clean);
     if (content === null || content === undefined) return `Error: ${clean} was not found at ${source.ref}.`;
     if (String(content).includes('\u0000')) return `Error: ${clean} is a binary file.`;
     const text = String(content);
