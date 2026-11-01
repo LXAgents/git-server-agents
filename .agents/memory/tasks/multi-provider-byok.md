@@ -1,7 +1,7 @@
 ---
 name: multi-provider-byok
 description: Task record for native multi-provider BYOK support (OpenRouter, OpenAI, Anthropic, DeepSeek, z.ai) with provider + model per user, org and repo (server 1.13.0).
-status: in progress
+status: done
 ---
 
 # Multi-provider BYOK
@@ -35,9 +35,9 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Plan | This record | git-server-agents | `plan/multi-provider-byok` | `.agents/` | |
-| 2 | Multi-provider BYOK | Schema, seed, providers, LLM layer, keys, models, agent, routes, tests, docs | git-server-agents | `feat/multi-provider-byok` | `prisma/`, `src/`, `test/`, `README.md`, `.env.example` | |
-| 3 | Release | 1.13.0 changelog and version | git-server-agents | `release/1.13.0` | `package.json`, `wiki/logs/` | |
+| 1 | Plan | This record | git-server-agents | `plan/multi-provider-byok` | `.agents/` | #62 |
+| 2 | Multi-provider BYOK | Schema, seed, providers, LLM layer, keys, models, agent, routes, tests, docs | git-server-agents | `feat/multi-provider-byok` | `prisma/`, `src/`, `test/`, `README.md`, `.env.example` | #63 |
+| 3 | Release | 1.13.0 changelog and version | git-server-agents | `release/1.13.0` | `package.json`, `wiki/logs/` | #64 |
 
 The dashboard half (provider dropdowns, provider + model per level) is git-client-agents
 1.12.0 and merges after this chain.
@@ -65,3 +65,8 @@ Record written before the work. Nothing else changed.
 - **Routes:** `GET /api/user/providers`, `GET /api/admin/providers`.
 - Footer gains a `Provider:` line. `@vendor/model` stays OpenRouter.
 - Tests: 166 pass on SQLite, with the provider APIs mocked (no live call from the sandbox).
+
+### Task 3 — release/1.13.0
+
+Version 1.13.0, changelog `wiki/logs/1/13/0/CHANGELOG.md` and its index row, PR column filled.
+The dashboard half is git-client-agents 1.12.0.
