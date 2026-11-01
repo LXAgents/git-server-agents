@@ -7,6 +7,7 @@ const gitlab = require('../src/services/gitlabService');
 const whitelist = require('../src/services/whitelistService');
 const keys = require('../src/services/keyService');
 const openRouter = require('../src/services/openRouterService');
+const anthropic = require('../src/services/anthropicService');
 const models = require('../src/services/modelService');
 const repoStore = require('../src/services/repoStore');
 const { processTask } = require('../src/services/agentService');
@@ -27,13 +28,13 @@ function githubTask(body, { org = true } = {}) {
   return { id: 't1', platform: 'github', event: 'issue_comment', payload: JSON.stringify(payload) };
 }
 
-function stubAll(t, { member = true, history = [], repository = null, collaborator = false, stored = 'openrouter/free' } = {}) {
+function stubAll(t, { member = true, history = [], repository = null, collaborator = false, stored = 'openrouter/free', storedProvider = 'openrouter' } = {}) {
   const calls = { keys: [], posted: [], members: [], complete: [], reactions: [] };
   t.mock.method(github, 'addReaction', async (repo, id, opts) => calls.reactions.push({ repo, id, ...opts }));
   t.mock.method(gitlab, 'awardEmoji', async (projectId, kind, iid, noteId) => calls.reactions.push({ projectId, kind, iid, noteId }));
   t.mock.method(console, 'log', () => {});
   t.mock.method(repoStore, 'findForEvent', async () => repository);
-  t.mock.method(models, 'resolveModel', async () => ({ model: stored, source: 'user' }));
+  t.mock.method(models, 'resolveModel', async () => ({ provider: storedProvider, model: stored, source: 'user' }));
   t.mock.method(github, 'isCollaborator', async () => collaborator);
   t.mock.method(whitelist, 'verify', async () => ({ allowed: true, installation, account: {} }));
   t.mock.method(github, 'installationToken', async () => 'inst-token');
@@ -162,7 +163,7 @@ test('an org member gets the org keys as fallback, with history and the issue de
     ]
   );
   assert.equal(github.getRepoTree.mock.callCount(), 0);
-  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n<sub>User: \`@alice\`</sub>\\n${REPLY_MARKER}`));
+  assert.match(calls.posted[0].body, new RegExp(`The answer\\.\\n\\n<sub>Model: \`openrouter/free\`</sub>\\n<sub>Provider: \`OpenRouter\`</sub>\\n<sub>Cost: \`0.000123 USD\`</sub>\\n<sub>User: \`@alice\`</sub>\\n${REPLY_MARKER}`));
 });
 
 test('a user who is not an org member never falls back to org keys', async (t) => {
@@ -226,6 +227,29 @@ test('@agents uses the stored model, and the footer names it', async (t) => {
   assert.equal(calls.complete[0].model, 'anthropic/claude-x');
   assert.equal(models.resolveModel.mock.calls[0].arguments[0].account.id, '1001');
   assert.match(calls.posted[0].body, /Model: `anthropic\/claude-x`/);
+});
+
+test('@agents dispatches to the stored provider with that provider\'s keys', async (t) => {
+  const calls = stubAll(t, { stored: 'claude-opus-5-5', storedProvider: 'anthropic' });
+  t.mock.method(anthropic, 'complete', async (req) => {
+    calls.complete.push(req);
+    return { content: 'From Claude.', cost: null };
+  });
+  assert.equal(await processTask(githubTask('@agents what changed?')), 'success');
+  assert.equal(keys.getProviderKeys.mock.calls[0].arguments[0], 'anthropic');
+  assert.equal(calls.complete[0].model, 'claude-opus-5-5');
+  assert.equal(calls.complete[0].apiKey, 'sk-user');
+  const { body } = calls.posted[0];
+  assert.match(body, /Model: `claude-opus-5-5`<\/sub>\n<sub>Provider: `Anthropic`<\/sub>\n<sub>Cost: `unknown`/);
+});
+
+test('strict BYOK: no key for the stored provider means no model call and a NO_API_KEY reply naming it', async (t) => {
+  const calls = stubAll(t, { stored: 'deepseek-chat', storedProvider: 'deepseek' });
+  t.mock.method(keys, 'getProviderKeys', async () => ({ provider: {}, keys: [] }));
+  await assert.rejects(processTask(githubTask('@agents hi')), /No active DeepSeek key/);
+  assert.equal(calls.complete.length, 0);
+  assert.match(calls.posted[0].body, /`NO_API_KEY`/);
+  assert.match(calls.posted[0].body, /DeepSeek key/);
 });
 
 test('@vendor/model overrides the stored model', async (t) => {
