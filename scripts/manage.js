@@ -5,8 +5,8 @@
 //   node scripts/manage.js add-org <github|gitlab> <orgName> <ownerUserId> [installationId]
 //   node scripts/manage.js remove-account <github|gitlab> <userId>
 //   node scripts/manage.js remove-org <github|gitlab> <orgName>
-//   node scripts/manage.js add-key <github|gitlab> <accountId> <apiKey> [priority] [provider]
-//   node scripts/manage.js add-org-key <orgName> <apiKey> [priority] [provider] [--platform gitlab]
+//   node scripts/manage.js add-key <github|gitlab> <accountId> <apiKey> [priority] [provider: openrouter|openai|anthropic|deepseek|zai]
+//   node scripts/manage.js add-org-key <orgName> <apiKey> [priority] [provider: openrouter|openai|anthropic|deepseek|zai] [--platform gitlab]
 //   node scripts/manage.js disable-key <keyId>
 //   node scripts/manage.js list
 //   node scripts/manage.js new-encryption-key
@@ -14,6 +14,7 @@ require('dotenv').config({ quiet: true });
 const crypto = require('crypto');
 const prisma = require('../src/db');
 const { encrypt } = require('../src/services/cryptoService');
+const { findProviderRow } = require('../src/services/keyService');
 
 const PLATFORMS = ['github', 'gitlab'];
 
@@ -39,8 +40,9 @@ function splitFlags(args) {
 
 async function createKey(owner, apiKey, priority, providerName) {
   required(apiKey, 'apiKey');
-  const provider = await prisma.provider.findFirst({ where: { displayName: providerName } });
-  if (!provider) throw new Error(`provider ${providerName} not found; run npm run db:seed`);
+  // A slug such as "openai" or a display name; see src/services/providers.js.
+  const provider = await findProviderRow(providerName);
+  if (!provider) throw new Error(`provider ${providerName} not found (openrouter, openai, anthropic, deepseek, zai); run npm run db:seed`);
   return prisma.accountKey.create({
     data: { ...owner, providerId: provider.id, apiKeyEncrypted: encrypt(apiKey), priority: Number(priority) || 0 },
   });
@@ -84,7 +86,7 @@ const commands = {
     console.log(`removed ${type} org ${orgName}`);
   },
 
-  async 'add-key'(platform, accountId, apiKey, priority = '0', providerName = 'OpenRouter') {
+  async 'add-key'(platform, accountId, apiKey, priority = '0', providerName = 'openrouter') {
     const type = platformArg(platform);
     required(accountId, 'accountId');
     const key = await createKey({ accountType: type, accountId }, apiKey, priority, providerName);
@@ -94,7 +96,7 @@ const commands = {
   // orgName is unique per platform only, so the platform comes from --platform (default github).
   async 'add-org-key'(...args) {
     const { positional, flags } = splitFlags(args);
-    const [orgName, apiKey, priority = '0', providerName = 'OpenRouter'] = positional;
+    const [orgName, apiKey, priority = '0', providerName = 'openrouter'] = positional;
     const platform = platformArg(flags.platform || 'github');
     const installation = await prisma.appInstallation.findUnique({
       where: { platform_orgName: { platform, orgName: required(orgName, 'orgName') } },

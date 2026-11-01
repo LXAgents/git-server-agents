@@ -69,6 +69,7 @@ test('leaves out the repo and org keys when the commenter may not use them', asy
 
 test('works with only a user or only an org', async () => {
   assert.equal((await getProviderKeys('OpenRouter', USER, null)).keys.length, 2);
+  assert.equal((await getProviderKeys('openrouter', USER, null)).keys.length, 2, 'slug and display name find the same provider');
   assert.equal((await getProviderKeys('OpenRouter', null, installation)).keys.length, 2);
 });
 
