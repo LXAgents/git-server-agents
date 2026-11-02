@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.18.1](1/18/1/CHANGELOG.md) | Chat and workspace log lines kept on one line (SonarCloud log injection) | `CHANGELOG.md` |
 | [1.18.0](1/18/0/CHANGELOG.md) | Codespaces workspace keys and tools, chat rooms with sessions, live progress and streamed answers | `CHANGELOG.md` |
 | [1.17.0](1/17/0/CHANGELOG.md) | The agent knows its own PR's branches and can read its own PR | `CHANGELOG.md` |
 | [1.16.0](1/16/0/CHANGELOG.md) | The agent reads mentioned issues, pull requests, their diffs and commits | `CHANGELOG.md` |
