@@ -179,7 +179,11 @@ model ChatMessage {
   type        String      @default("message")
   senderId    String?
   senderLogin String?
+  // The poster's avatar URL, when the platform gave one.
+  senderAvatar String?
   content     String
+  // The event's data as JSON text, e.g. the model, provider, cost and token counts of an answer.
+  data        String?
   createdAt   DateTime    @default(now())
   session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 

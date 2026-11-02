@@ -6,6 +6,7 @@ const bus = require('../services/chat/bus');
 const { emit } = require('../services/chat');
 const { userSender } = require('../services/chat/events');
 const chatAgent = require('../services/chat/chatAgent');
+const chatSummary = require('../services/chat/chatSummary');
 const { HttpError } = require('../errors');
 const log = require('../services/logService');
 const { logSafe } = require('../utils/strings');
@@ -22,6 +23,12 @@ async function listRooms(req, res) {
   res.json(await rooms.listRooms(req.user));
 }
 
+// GET ?room=... The details pane: room, model and provider, key counts and usage totals.
+async function summary(req, res) {
+  const room = await rooms.authorizeRoom(req.user, req.query.room);
+  res.json(await chatSummary.summary(room, req.user));
+}
+
 async function listSessions(req, res) {
   const room = await rooms.authorizeRoom(req.user, req.query.room);
   res.json(await store.listSessions(room.key, room.room));
@@ -36,12 +43,14 @@ async function createSession(req, res) {
 async function renameSession(req, res) {
   const body = req.body || {};
   const room = await rooms.authorizeRoom(req.user, body.room || req.query.room);
+  if (store.isActivity(await store.requireSession(room.key, req.params.id))) throw new HttpError(403, 'the Agent activity session cannot be renamed');
   res.json(await store.renameSession(room.key, room.room, req.params.id, body.title));
 }
 
 async function deleteSession(req, res) {
   const room = await rooms.authorizeRoom(req.user, req.query.room);
   const session = await store.requireSession(room.key, req.params.id);
+  if (store.isActivity(session)) throw new HttpError(403, 'the Agent activity session cannot be deleted');
   // In shared rooms only the person who started a session may delete it.
   if (room.kind !== 'user' && session.createdBy !== owner(req.user)) throw new HttpError(403, 'only whoever started this session can delete it');
   await store.deleteSession(room.key, session.id);
@@ -55,19 +64,24 @@ async function listMessages(req, res) {
 }
 
 // POST { room, sessionId?, content }. Without a session one is started, titled from the message.
-// Answers 201 with the stored message and whether the agent started answering.
+// sessionId "activity" posts to the room's Agent activity session, where every message is for the
+// agent. Answers 201 with the stored message and whether the agent started answering.
+async function sessionFor(room, sessionId, content, user) {
+  if (sessionId === 'activity') return store.activitySession(room.key);
+  if (sessionId) return store.requireSession(room.key, sessionId);
+  return store.createSession(room.key, room.room, { title: content.split('\n')[0].slice(0, 60), createdBy: owner(user) });
+}
+
 async function postMessage(req, res) {
   const body = req.body || {};
   const content = typeof body.content === 'string' ? body.content.trim() : '';
   if (!content) throw new HttpError(400, 'content is required');
   if (content.length > store.MAX_CONTENT_CHARS) throw new HttpError(400, `content is longer than ${store.MAX_CONTENT_CHARS} characters`);
   const room = await rooms.authorizeRoom(req.user, body.room);
-  const session = body.sessionId
-    ? await store.requireSession(room.key, body.sessionId)
-    : await store.createSession(room.key, room.room, { title: content.split('\n')[0].slice(0, 60), createdBy: owner(req.user) });
+  const session = await sessionFor(room, body.sessionId, content, req.user);
   const event = await emit({ key: room.key, room: room.room, sessionId: session.id }, { type: 'message', sender: userSender(req.user), content });
   if (!event) throw new Error('the message could not be stored');
-  const { started, busy } = chatAgent.maybeAnswer({ room, user: req.user, sessionId: session.id, question: event });
+  const { started, busy } = chatAgent.maybeAnswer({ room, user: req.user, sessionId: session.id, question: event, activity: store.isActivity(session) });
   res.status(201).json({ message: event, sessionId: session.id, agent: started ? 'answering' : busy ? 'busy' : 'idle' });
 }
 
@@ -110,4 +124,4 @@ async function stream(req, res) {
   log.info('chat', `stream opened on a ${logSafe(room.kind)} room`, { platform: req.user.platform });
 }
 
-module.exports = { listRooms, listSessions, createSession, renameSession, deleteSession, listMessages, postMessage, stream };
+module.exports = { listRooms, summary, listSessions, createSession, renameSession, deleteSession, listMessages, postMessage, stream };

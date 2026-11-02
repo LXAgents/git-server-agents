@@ -71,12 +71,13 @@ see [Chat rooms](../guides/chat.md).
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/rooms` | `{ user, orgs, repos }`: the rooms you may join now |
+| GET | `/summary?room=` | `{ room, model, keys, stats }`: the model the agent would use, key counts (never keys), and the tokens and cost of stored answers |
 | GET | `/sessions?room=` | The room's sessions, latest first |
 | POST | `/sessions` | `{ room, title? }` |
-| PATCH | `/sessions/:id` | `{ room, title }` |
-| DELETE | `/sessions/:id?room=` | Only the starter in repo and org rooms |
+| PATCH | `/sessions/:id` | `{ room, title }`; not the Agent activity session |
+| DELETE | `/sessions/:id?room=` | Only the starter in repo and org rooms; never the Agent activity session |
 | GET | `/messages?room=&sessionId=` | The session's last 200 stored messages, oldest first |
-| POST | `/messages` | `{ room, sessionId?, content }`; 201 `{ message, sessionId, agent: "answering" \| "busy" \| "idle" }` |
+| POST | `/messages` | `{ room, sessionId?, content }`, where `sessionId: "activity"` posts to the room's Agent activity session; 201 `{ message, sessionId, agent: "answering" \| "busy" \| "idle" }` |
 | GET | `/stream?room=` | Server-Sent Events for every session in the room |
 
 ## Command line (on the server host)

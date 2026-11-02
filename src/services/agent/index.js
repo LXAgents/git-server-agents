@@ -23,7 +23,7 @@ const { buildSystemPrompt, buildToolGuide, buildHistory, replyFooter } = require
 const { parseLoopLimit } = require('./loopLimit');
 const { chatWithFallback } = require('./keyFallback');
 const { converse } = require('./conversation');
-const { newSpend, formatCost } = require('./cost');
+const { newSpend, formatCost, usageData } = require('./cost');
 const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
 
@@ -204,7 +204,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
     asker,
   });
   await api.postReply(comment, `${answer}\n\n${footer}\n${REPLY_MARKER}`, token);
-  await ctx.chat.report(answer, { model, provider: providerInfo.name, cost: formatCost(request.spend), loop: rounds });
+  await ctx.chat.report(answer, { model, provider: providerInfo.name, cost: formatCost(request.spend), loop: rounds, usage: usageData(request.spend) });
   return 'success';
 }
 

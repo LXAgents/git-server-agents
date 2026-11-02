@@ -1,7 +1,8 @@
 // Anthropic's Messages API through the official SDK. The agent speaks the Chat Completions
 // shape (system/user/assistant/tool messages, OpenAI-style tools), so requests and replies are
-// translated here, and the reply comes back as { content, tool_calls?, cost } like the others.
+// translated here, and the reply comes back as { content, tool_calls?, cost, tokens } like the others.
 const Anthropic = require('@anthropic-ai/sdk');
+const { tokensOf } = require('./usage');
 const config = require('../../config');
 
 const Client = Anthropic.default || Anthropic;
@@ -79,14 +80,14 @@ function toAnthropicTools(tools) {
   });
 }
 
-// Anthropic reply -> { content, tool_calls?, cost, providerContent }.
+// Anthropic reply -> { content, tool_calls?, cost, tokens, providerContent }.
 function fromAnthropic(reply) {
   const blocks = Array.isArray(reply && reply.content) ? reply.content : [];
   const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('');
   const toolCalls = blocks
     .filter((b) => b.type === 'tool_use')
     .map((b) => ({ id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input || {}) } }));
-  return { content: text, tool_calls: toolCalls.length ? toolCalls : undefined, cost: null, providerContent: blocks };
+  return { content: text, tool_calls: toolCalls.length ? toolCalls : undefined, cost: null, tokens: tokensOf(reply && reply.usage), providerContent: blocks };
 }
 
 // Sends the request; with onToken it is streamed and every text delta is passed on as it arrives.

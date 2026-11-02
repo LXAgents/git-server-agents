@@ -1,5 +1,6 @@
 // The agent answering in a chat room. In a user room every message is for the agent; in repo
-// and org rooms only messages that start with "@lxagents" (or name an OpenRouter model). The
+// and org rooms only messages that start with "@lxagents" (or name an OpenRouter model), except in
+// the room's Agent activity session, where every message is for the agent too. The
 // model, provider and keys follow the room: a repo room uses the repository's, then the org's
 // (for org members), then the asker's own; an org room the org's, then the asker's; a user room
 // the asker's own. A repo room also gets the read tools at the default branch and, for writers on
@@ -19,7 +20,7 @@ const { buildToolGuide } = require('../agent/prompt');
 const { parseLoopLimit } = require('../agent/loopLimit');
 const { chatWithFallback } = require('../agent/keyFallback');
 const { converse } = require('../agent/conversation');
-const { newSpend, formatCost } = require('../agent/cost');
+const { newSpend, formatCost, usageData } = require('../agent/cost');
 const store = require('./chatStore');
 const { AGENT, makeEvent } = require('./events');
 const bus = require('./bus');
@@ -31,11 +32,12 @@ const HISTORY_MESSAGES = 40;
 // One answer at a time per session: a second question waits for the first answer.
 const busy = new Set();
 
-// Whether `text` asks the agent, and the question without the trigger.
-function readQuestion(kind, text) {
+// Whether `text` asks the agent, and the question without the trigger. In a user room, and in any
+// room's Agent activity session (`activity`), every message is for the agent.
+function readQuestion(kind, text, activity = false) {
   const parsed = parseComment(text);
   if (parsed.auto || parsed.model) return { asks: Boolean(parsed.prompt), prompt: parsed.prompt, model: parsed.model };
-  if (kind === 'user') return { asks: Boolean(String(text).trim()), prompt: String(text).trim(), model: null };
+  if (kind === 'user' || activity) return { asks: Boolean(String(text).trim()), prompt: String(text).trim(), model: null };
   return { asks: false };
 }
 
@@ -63,12 +65,18 @@ function toHistory(events, questionId) {
     .map((e) => (e.sender.type === 'agent' ? { role: 'assistant', content: e.content } : { role: 'user', content: `@${e.sender.login || 'user'}: ${parseComment(e.content).prompt || e.content}` }));
 }
 
-// The model, provider and keys for this room and asker.
-async function chooseModelAndKeys(room, user, model) {
+// Whose settings and keys apply for this room and asker: the asker's account, the room's org
+// (keys only for org members) and repository.
+async function roomScope(room, user) {
   const account = { type: user.platform, id: String(user.id) };
   const installation = room.installation || null;
   const orgMember = room.kind === 'org' || (installation ? await platforms.isOrgMember(user.platform, user.token, user, installation.orgName).catch(() => false) : false);
-  const repository = room.repository || null;
+  return { account, installation, orgMember, repository: room.repository || null };
+}
+
+// The model, provider and keys for this room and asker.
+async function chooseModelAndKeys(room, user, model) {
+  const { account, installation, orgMember, repository } = await roomScope(room, user);
   const chosen = model ? { provider: 'openrouter', model } : await models.resolveModel({ repository, installation, account }, 'text');
   const providerInfo = findProvider(chosen.provider);
   if (!providerInfo) throw new AgentError('BAD_REQUEST', `The stored provider ${chosen.provider} is not supported. Pick another one on the dashboard.`);
@@ -150,7 +158,7 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
       type: 'message',
       sender: AGENT,
       content: text,
-      data: { model: choice.model, provider: choice.providerInfo.name, cost: formatCost(request.spend), loop: rounds },
+      data: { model: choice.model, provider: choice.providerInfo.name, cost: formatCost(request.spend), loop: rounds, usage: usageData(request.spend) },
     });
     log.info('chat', `answered in ${room.kind} room with ${logSafe(choice.model)} in ${Date.now() - started}ms`, logMeta);
   } catch (err) {
@@ -163,8 +171,8 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
 
 // Starts an answer when the message asks for one. Resolves at once with whether it started;
 // the answer arrives on the room as events.
-function maybeAnswer({ room, user, sessionId, question }) {
-  const ask = readQuestion(room.kind, question.content);
+function maybeAnswer({ room, user, sessionId, question, activity = false }) {
+  const ask = readQuestion(room.kind, question.content, activity);
   if (!ask.asks) return { started: false };
   const target = { key: room.key, room: room.room, sessionId };
   const send = {
@@ -180,4 +188,4 @@ function maybeAnswer({ room, user, sessionId, question }) {
   return { started: true, running };
 }
 
-module.exports = { maybeAnswer, readQuestion, toHistory, systemPrompt };
+module.exports = { maybeAnswer, readQuestion, toHistory, systemPrompt, roomScope };

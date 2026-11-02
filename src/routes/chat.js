@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(userAuth);
 
 router.get('/rooms', chat.listRooms);
+router.get('/summary', chat.summary);
 router.get('/sessions', chat.listSessions);
 router.post('/sessions', chat.createSession);
 router.patch('/sessions/:id', chat.renameSession);

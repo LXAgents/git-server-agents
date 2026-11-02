@@ -30,7 +30,14 @@ test.before(async () => {
       { choices: [{ delta: {}, finish_reason: 'tool_calls' }], usage: { cost: 0.0012 } },
     ]);
   });
-  app.post('/oa/chat/completions', (req, res) => sse(res, [{ choices: [{ delta: { content: 'Hi ' } }] }, { choices: [{ delta: { content: 'there' } }] }]));
+  // Usage comes last, and only for providers asked for it with stream_options.
+  app.post('/oa/chat/completions', (req, res) =>
+    sse(res, [
+      { choices: [{ delta: { content: 'Hi ' } }] },
+      { choices: [{ delta: { content: 'there' } }] },
+      ...(req.body.stream_options && req.body.stream_options.include_usage ? [{ choices: [], usage: { prompt_tokens: 12, completion_tokens: 2 } }] : []),
+    ])
+  );
   // Anthropic's Messages API stream.
   app.post('/an/v1/messages', (req, res) => {
     assert.equal(req.body.stream, true);
@@ -81,6 +88,10 @@ test('OpenAI-compatible providers stream too', async () => {
   const tokens = [];
   const reply = await openAi.complete({ baseUrl: `${base}/oa`, apiKey: 'k', model: 'm', messages: [], onToken: (t) => tokens.push(t), providerName: 'DeepSeek' });
   assert.deepEqual([reply.content, tokens.length], ['Hi there', 2]);
+  assert.deepEqual(reply.tokens, { input: 12, output: 2 });
+  // z.ai is not sent stream_options, so it reports no counts.
+  const glm = await openAi.complete({ baseUrl: `${base}/oa`, apiKey: 'k', model: 'm', messages: [], onToken: () => {}, providerName: 'z.ai' });
+  assert.equal(glm.tokens, null);
 });
 
 test('Anthropic streams through the SDK', async () => {
@@ -88,6 +99,7 @@ test('Anthropic streams through the SDK', async () => {
   const reply = await anthropic.complete({ baseUrl: `${base}/an`, apiKey: 'k', model: 'claude-x', messages: [{ role: 'user', content: 'hi' }], onToken: (t) => tokens.push(t) });
   assert.deepEqual(tokens, ['Claude ', 'streams']);
   assert.equal(reply.content, 'Claude streams');
+  assert.deepEqual(reply.tokens, { input: 1, output: 2 });
 });
 
 test('the parser ignores comments and bad lines and stops at [DONE]', () => {
