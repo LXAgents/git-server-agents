@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.19.1](1/19/1/CHANGELOG.md) | Chat agent can create, close and reopen issues and pull requests in repository rooms | `CHANGELOG.md` |
 | [1.19.0](1/19/0/CHANGELOG.md) | Room summary, token counts, avatars and the activity session for the single-room chat | `CHANGELOG.md` |
 | [1.18.1](1/18/1/CHANGELOG.md) | Chat and workspace log lines kept on one line (SonarCloud log injection) | `CHANGELOG.md` |
 | [1.18.0](1/18/0/CHANGELOG.md) | Codespaces workspace keys and tools, chat rooms with sessions, live progress and streamed answers | `CHANGELOG.md` |
