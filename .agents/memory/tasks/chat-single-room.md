@@ -1,7 +1,7 @@
 ---
 name: chat-single-room
 description: Task record for the server side of the single-room chat (1.19.0): token usage on answers, stored event data and avatars, agent activity session, /api/chat/summary.
-status: in progress
+status: done
 ---
 
 # Server support for the single-room chat
@@ -23,6 +23,6 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/chat-single-room` | `.agents/` | |
-| 2 | Chat summary | Usage, columns, activity session, summary endpoint, tests, docs | git-server-agents | `feat/chat-summary` | `prisma/`, `src/`, `test/`, `wiki/` | |
-| 3 | Release | 1.19.0 changelog and version | git-server-agents | `release/1.19.0` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/chat-single-room` | `.agents/` | #94 |
+| 2 | Chat summary | Usage, columns, activity session, summary endpoint, tests, docs | git-server-agents | `feat/chat-summary` | `prisma/`, `src/`, `test/`, `wiki/` | #95 |
+| 3 | Release | 1.19.0 changelog and version | git-server-agents | `release/1.19.0` | `wiki/logs/`, `package.json` | #96 |
