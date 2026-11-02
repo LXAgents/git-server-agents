@@ -1,5 +1,5 @@
 // The chat's one event shape:
-//   { type: 'message' | 'progress' | 'report' | 'token', room, sessionId, sender: { id, login, type },
+//   { type: 'message' | 'progress' | 'report' | 'token', room, sessionId, sender: { id, login, type, avatarUrl? },
 //     content, data?, timestamp }
 // sender.type is "user" or "agent". `room` is the room as the client named it ("user:1001",
 // "repo:<id>", "org:<id>"). "token" carries a piece of the agent's answer while it is written.
@@ -16,12 +16,13 @@ function makeEvent({ type, room, sessionId = null, sender, content = '', data, t
     content: String(content),
     timestamp: new Date(timestamp).toISOString(),
   };
+  if (sender.avatarUrl) event.sender.avatarUrl = String(sender.avatarUrl);
   if (data !== undefined) event.data = data;
   return event;
 }
 
 function userSender(user) {
-  return { id: String(user.id), login: user.login || null, type: 'user' };
+  return { id: String(user.id), login: user.login || null, type: 'user', avatarUrl: user.avatarUrl || null };
 }
 
 module.exports = { AGENT, TYPES, makeEvent, userSender };

@@ -9,8 +9,30 @@ const MAX_CONTENT_CHARS = 20_000;
 const MAX_TITLE_CHARS = 255;
 const ACTIVITY_TITLE = 'Agent activity';
 
+function isActivity(s) {
+  return s.createdBy === null && s.title === ACTIVITY_TITLE;
+}
+
 function sessionView(s, room) {
-  return { id: s.id, room, title: s.title, createdBy: s.createdBy, createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString() };
+  return { id: s.id, room, title: s.title, createdBy: s.createdBy, activity: isActivity(s), createdAt: s.createdAt.toISOString(), updatedAt: s.updatedAt.toISOString() };
+}
+
+// Stored event data is capped, so one odd event can't bloat the table.
+const MAX_DATA_CHARS = 4000;
+
+function dataText(data) {
+  if (data === undefined || data === null) return null;
+  const text = JSON.stringify(data);
+  return text.length <= MAX_DATA_CHARS ? text : null;
+}
+
+function parseData(text) {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 function cleanTitle(title) {
@@ -63,7 +85,9 @@ async function save(sessionId, event) {
       type: event.type,
       senderId: event.sender.id,
       senderLogin: event.sender.login,
+      senderAvatar: event.sender.avatarUrl || null,
       content: String(event.content).slice(0, MAX_CONTENT_CHARS),
+      data: dataText(event.data),
       createdAt: new Date(event.timestamp),
     },
   });
@@ -75,15 +99,14 @@ async function save(sessionId, event) {
 // The session's last `limit` stored events, oldest first, in the event shape.
 async function history(sessionId, room, limit = HISTORY_LIMIT) {
   const rows = await prisma.chatMessage.findMany({ where: { sessionId }, orderBy: { createdAt: 'desc' }, take: Math.min(limit, HISTORY_LIMIT) });
-  return rows.reverse().map((r) => ({
-    id: r.id,
-    type: r.type,
-    room,
-    sessionId,
-    sender: { id: r.senderId, login: r.senderLogin, type: r.role === 'assistant' ? 'agent' : 'user' },
-    content: r.content,
-    timestamp: r.createdAt.toISOString(),
-  }));
+  return rows.reverse().map((r) => {
+    const sender = { id: r.senderId, login: r.senderLogin, type: r.role === 'assistant' ? 'agent' : 'user' };
+    if (r.senderAvatar) sender.avatarUrl = r.senderAvatar;
+    const event = { id: r.id, type: r.type, room, sessionId, sender, content: r.content, timestamp: r.createdAt.toISOString() };
+    const data = parseData(r.data);
+    if (data !== undefined) event.data = data;
+    return event;
+  });
 }
 
-module.exports = { listSessions, createSession, requireSession, renameSession, deleteSession, activitySession, save, history, HISTORY_LIMIT, MAX_CONTENT_CHARS, ACTIVITY_TITLE };
+module.exports = { listSessions, createSession, requireSession, renameSession, deleteSession, activitySession, isActivity, save, history, parseData, HISTORY_LIMIT, MAX_CONTENT_CHARS, ACTIVITY_TITLE };

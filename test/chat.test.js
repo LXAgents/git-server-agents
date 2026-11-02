@@ -171,6 +171,29 @@ test('the stream carries the room\'s events and the agent answers in the persona
   assert.deepEqual(rows.map((r) => r.role), ['user', 'assistant']);
 });
 
+test('the Agent activity session is for the agent: answered without the trigger, and kept', async () => {
+  const room = `org:${org.id}`;
+  const stream = await call('GET', `/stream?room=${room}`);
+  const reading = readEvents(stream, (events) => events.some((e) => e.type === 'message' && e.sender.type === 'agent'));
+  const res = await call('POST', '/messages', { body: { room, sessionId: 'activity', content: 'Summarise the open issues' } });
+  assert.equal(res.status, 201);
+  const posted = await res.json();
+  assert.equal(posted.agent, 'answering');
+  assert.equal(posted.message.sender.avatarUrl, 'https://avatars.example/1001');
+  const answer = (await reading).find((e) => e.type === 'message' && e.sender.type === 'agent');
+  assert.equal(answer.sessionId, posted.sessionId);
+  // The answer's usage and the asker's avatar are stored, so history keeps them.
+  const history = await (await call('GET', `/messages?room=${room}&sessionId=${posted.sessionId}`)).json();
+  assert.equal(history[0].sender.avatarUrl, 'https://avatars.example/1001');
+  assert.equal(history[1].data.provider, 'OpenAI');
+  assert.ok(history[1].data.usage);
+  const sessions = await (await call('GET', `/sessions?room=${room}`)).json();
+  const activity = sessions.find((s) => s.id === posted.sessionId);
+  assert.deepEqual([activity.title, activity.activity], ['Agent activity', true]);
+  assert.equal((await call('DELETE', `/sessions/${posted.sessionId}?room=${room}`)).status, 403);
+  assert.equal((await call('PATCH', `/sessions/${posted.sessionId}`, { body: { room, title: 'Mine now' } })).status, 403);
+});
+
 test('without a key the agent answers with the error code', async () => {
   const stream = await call('GET', '/stream?room=user:1002', { token: 'gh-bob' });
   const reading = readEvents(stream, (events) => events.some((e) => e.sender.type === 'agent' && e.type === 'message'));

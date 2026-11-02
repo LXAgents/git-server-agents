@@ -1,5 +1,6 @@
 // The agent answering in a chat room. In a user room every message is for the agent; in repo
-// and org rooms only messages that start with "@lxagents" (or name an OpenRouter model). The
+// and org rooms only messages that start with "@lxagents" (or name an OpenRouter model), except in
+// the room's Agent activity session, where every message is for the agent too. The
 // model, provider and keys follow the room: a repo room uses the repository's, then the org's
 // (for org members), then the asker's own; an org room the org's, then the asker's; a user room
 // the asker's own. A repo room also gets the read tools at the default branch and, for writers on
@@ -31,11 +32,12 @@ const HISTORY_MESSAGES = 40;
 // One answer at a time per session: a second question waits for the first answer.
 const busy = new Set();
 
-// Whether `text` asks the agent, and the question without the trigger.
-function readQuestion(kind, text) {
+// Whether `text` asks the agent, and the question without the trigger. In a user room, and in any
+// room's Agent activity session (`activity`), every message is for the agent.
+function readQuestion(kind, text, activity = false) {
   const parsed = parseComment(text);
   if (parsed.auto || parsed.model) return { asks: Boolean(parsed.prompt), prompt: parsed.prompt, model: parsed.model };
-  if (kind === 'user') return { asks: Boolean(String(text).trim()), prompt: String(text).trim(), model: null };
+  if (kind === 'user' || activity) return { asks: Boolean(String(text).trim()), prompt: String(text).trim(), model: null };
   return { asks: false };
 }
 
@@ -163,8 +165,8 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
 
 // Starts an answer when the message asks for one. Resolves at once with whether it started;
 // the answer arrives on the room as events.
-function maybeAnswer({ room, user, sessionId, question }) {
-  const ask = readQuestion(room.kind, question.content);
+function maybeAnswer({ room, user, sessionId, question, activity = false }) {
+  const ask = readQuestion(room.kind, question.content, activity);
   if (!ask.asks) return { started: false };
   const target = { key: room.key, room: room.room, sessionId };
   const send = {
