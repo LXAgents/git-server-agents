@@ -16,6 +16,6 @@ status: done
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/codespace-command-quoting` | `.agents/` | |
-| 2 | Quote the command | `shellQuote`, tests, docs | git-server-agents | `fix/codespace-command-quoting` | `src/services/platforms/`, `test/`, `wiki/` | |
-| 3 | Release | 1.19.2 changelog and version | git-server-agents | `release/1.19.2` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/codespace-command-quoting` | `.agents/` | #100 |
+| 2 | Quote the command | `shellQuote`, tests, docs | git-server-agents | `fix/codespace-command-quoting` | `src/services/platforms/`, `test/`, `wiki/` | #101 |
+| 3 | Release | 1.19.2 changelog and version | git-server-agents | `release/1.19.2` | `wiki/logs/`, `package.json` | #102 |
