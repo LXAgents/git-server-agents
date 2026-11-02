@@ -38,6 +38,7 @@ description: Index of .agents/memory/tasks — one row per task record.
 | [`tasks/chat-log-injection.md`](../memory/tasks/chat-log-injection.md) | Task record for the SonarCloud log-injection finding in the chat stream (1.18.1). |
 | [`tasks/chat-single-room.md`](../memory/tasks/chat-single-room.md) | Task record for the server side of the single-room chat (1.19.0): token usage on answers, stored event data and avatars, agent activity session, /api/chat/summary. |
 | [`tasks/chat-manage-tools.md`](../memory/tasks/chat-manage-tools.md) | Task record for the issue and pull request tools in chat repository rooms (1.19.1). |
+| [`tasks/codespace-command-quoting.md`](../memory/tasks/codespace-command-quoting.md) | Task record for codespace commands running only their first word, fixed by quoting (1.19.2). |
 | [`tasks/webhook-agent-server.md`](../memory/tasks/webhook-agent-server.md) | Task record for building the zero-trust GitHub/GitLab webhook server and background AI agent worker. |
 | [`tasks/webhook-refusal-logs.md`](../memory/tasks/webhook-refusal-logs.md) | Task record for logging refused webhooks and checking the setup at start (server 1.12.0). |
 | [`tasks/wiki-refactor.md`](../memory/tasks/wiki-refactor.md) | Task record for moving the server's human documentation from README.md into wiki/ pages and routing them from .agents/index (docs only, no release). |
