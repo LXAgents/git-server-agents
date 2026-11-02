@@ -1,6 +1,6 @@
 {
   "name": "@lxagents/git-server-agents",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "Zero-trust webhook server and AI agent for GitHub and GitLab apps",
   "main": "src/server.js",
   "scripts": {

@@ -1,7 +1,7 @@
 ---
 name: chat-log-injection
 description: Task record for the SonarCloud log-injection finding in the chat stream (1.18.1).
-status: in progress
+status: done
 ---
 
 # Chat log injection fix
@@ -23,6 +23,6 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/chat-log-injection` | `.agents/` | |
-| 2 | Log injection | `logSafe()` on the chat and workspace log lines | git-server-agents | `fix/chat-log-injection` | `src/` | |
-| 3 | Release | 1.18.1 changelog and version | git-server-agents | `release/1.18.1` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/chat-log-injection` | `.agents/` | #91 |
+| 2 | Log injection | `logSafe()` on the chat and workspace log lines | git-server-agents | `fix/chat-log-injection` | `src/` | #92 |
+| 3 | Release | 1.18.1 changelog and version | git-server-agents | `release/1.18.1` | `wiki/logs/`, `package.json` | #93 |
