@@ -44,7 +44,7 @@ test('routes OpenAI-compatible providers to /chat/completions with only known me
       { role: 'user', content: 'hi' },
     ],
   });
-  assert.deepEqual(reply, { content: 'openai says hi to gpt-5', tool_calls: undefined, cost: null });
+  assert.deepEqual(reply, { content: 'openai says hi to gpt-5', tool_calls: undefined, cost: null, tokens: null });
   assert.deepEqual(chatRequests[0].body.messages[1], { role: 'assistant', content: 'earlier' });
 });
 

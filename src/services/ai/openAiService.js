@@ -1,9 +1,14 @@
 // OpenAI's Chat Completions API, and the providers that speak the same protocol at their own
 // base URL: DeepSeek (https://api.deepseek.com) and z.ai GLM (https://api.z.ai/api/paas/v4).
-// Returns the assistant message ({ content, tool_calls?, cost }) like openRouterService.
+// Returns the assistant message ({ content, tool_calls?, cost, tokens }) like openRouterService.
 const axios = require('axios');
 const config = require('../../config');
 const { streamCompletion } = require('./chatStream');
+const { tokensOf } = require('./usage');
+
+// Providers documented to send usage at the end of a stream when asked. Others are not sent the
+// option, in case they refuse fields they don't know.
+const STREAM_USAGE = new Set(['OpenAI', 'DeepSeek']);
 
 // Every failure is tagged source "provider" with the provider's name, so agentErrors can tell
 // it from a platform error and name the provider in the reply.
@@ -38,7 +43,7 @@ async function complete({ baseUrl, apiKey, model, messages, tools, timeout = con
       reply = await streamCompletion({
         url: `${baseUrl.replace(/\/$/, '')}/chat/completions`,
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body,
+        body: STREAM_USAGE.has(providerName) ? { ...body, stream_options: { include_usage: true } } : body,
         timeout,
         onToken,
         bodyError: (status, error) => {
@@ -51,7 +56,7 @@ async function complete({ baseUrl, apiKey, model, messages, tools, timeout = con
       throw tag(err, providerName);
     }
     if (!reply.content && !reply.tool_calls) throw emptyError(model);
-    return { content: reply.content, tool_calls: reply.tool_calls, cost: null };
+    return { content: reply.content, tool_calls: reply.tool_calls, cost: null, tokens: tokensOf(reply.usage) };
   }
   let data;
   try {
@@ -69,7 +74,7 @@ async function complete({ baseUrl, apiKey, model, messages, tools, timeout = con
   }
   const message = data && data.choices && data.choices[0] && data.choices[0].message;
   if (!message || (!message.content && !(message.tool_calls && message.tool_calls.length))) throw emptyError(model);
-  return { content: message.content || '', tool_calls: message.tool_calls, cost: null };
+  return { content: message.content || '', tool_calls: message.tool_calls, cost: null, tokens: tokensOf(data.usage) };
 }
 
 // Ids that are not chat models: embeddings, speech, images, moderation and the like.

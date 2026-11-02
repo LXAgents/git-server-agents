@@ -1,6 +1,7 @@
 const axios = require('axios');
 const config = require('../../config');
 const { streamCompletion } = require('./chatStream');
+const { tokensOf } = require('./usage');
 
 // An HTTP-shaped error for a failure OpenRouter reports inside a 200 response.
 function bodyError(status, error) {
@@ -30,7 +31,7 @@ async function completeStreaming({ url, headers, body, timeout, onToken, model }
     throw err;
   }
   if (!reply.content && !reply.tool_calls) throw emptyError(model);
-  return { role: 'assistant', content: reply.content, tool_calls: reply.tool_calls, cost: costOf(reply.usage) };
+  return { role: 'assistant', content: reply.content, tool_calls: reply.tool_calls, cost: costOf(reply.usage), tokens: tokensOf(reply.usage) };
 }
 
 // One chat completion. Returns the assistant message ({ content, tool_calls? }). Every failure
@@ -64,7 +65,7 @@ async function complete({ baseUrl, apiKey, model, messages, tools, timeout = con
   if (choice && choice.error) throw bodyError(Number(choice.error.code) || 502, choice.error);
   const message = choice && choice.message;
   if (!message || (!message.content && !(message.tool_calls && message.tool_calls.length))) throw emptyError(model);
-  return { ...message, cost: costOf(data.usage) };
+  return { ...message, cost: costOf(data.usage), tokens: tokensOf(data.usage) };
 }
 
 // A single system + user exchange, returning the text.

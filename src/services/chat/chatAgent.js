@@ -19,7 +19,7 @@ const { buildToolGuide } = require('../agent/prompt');
 const { parseLoopLimit } = require('../agent/loopLimit');
 const { chatWithFallback } = require('../agent/keyFallback');
 const { converse } = require('../agent/conversation');
-const { newSpend, formatCost } = require('../agent/cost');
+const { newSpend, formatCost, usageData } = require('../agent/cost');
 const store = require('./chatStore');
 const { AGENT, makeEvent } = require('./events');
 const bus = require('./bus');
@@ -150,7 +150,7 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
       type: 'message',
       sender: AGENT,
       content: text,
-      data: { model: choice.model, provider: choice.providerInfo.name, cost: formatCost(request.spend), loop: rounds },
+      data: { model: choice.model, provider: choice.providerInfo.name, cost: formatCost(request.spend), loop: rounds, usage: usageData(request.spend) },
     });
     log.info('chat', `answered in ${room.kind} room with ${logSafe(choice.model)} in ${Date.now() - started}ms`, logMeta);
   } catch (err) {

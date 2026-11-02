@@ -4,7 +4,7 @@ const config = require('../../config');
 const llm = require('../ai/llmService');
 const { TOOLS } = require('./repoTools');
 const { DEFAULT_TOOL_ROUNDS } = require('./loopLimit');
-const { addCost } = require('./cost');
+const { addCost, addTokens } = require('./cost');
 const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
 
@@ -81,7 +81,10 @@ async function timedCall(request, apiKey, messages, tools) {
   try {
     const stream = onToken ? { onToken: (text) => safely(() => onToken(text)) } : {};
     const reply = await llm.complete({ ...body, ...stream, apiKey, messages, tools, timeout: Math.min(config.ai.modelTimeoutMs, remaining) });
-    if (spend) addCost(spend, reply.cost);
+    if (spend) {
+      addCost(spend, reply.cost);
+      addTokens(spend, reply.tokens);
+    }
     log.info('agent', `${label}${logSafe(request.model)} answered in ${Date.now() - started}ms${reply.tool_calls ? ' (tool calls)' : ''}`, logMeta);
     return reply;
   } catch (err) {
