@@ -163,6 +163,13 @@ model ChatSession {
   room      String
   title     String        @default("New Chat")
   createdBy String?
+  // "chat" (the team chat pane) or "agent" (the Agent work pane, where every message asks the
+  // agent). The Agent activity session is found by createdBy null + its title, whatever its kind.
+  kind      String        @default("chat")
+  // The session's AGENTS.md (people's instructions for the agent) and MEMORY.md (the agent's
+  // notes), for agent sessions. Each up to 20,000 characters.
+  agentsMd  String?
+  memoryMd  String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   messages  ChatMessage[]

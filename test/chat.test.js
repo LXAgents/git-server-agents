@@ -127,6 +127,65 @@ test('sessions: create, rename, list and delete; only the starter deletes in sha
   assert.equal((await call('DELETE', `/sessions/${session.id}?room=${room}`)).status, 204);
 });
 
+test('agent sessions keep an AGENTS.md and a MEMORY.md; only writers change AGENTS.md in a repository room', async () => {
+  const room = `repo:${repo.id}`;
+  const stream = await call('GET', `/stream?room=${room}`, { token: 'gh-bob' });
+  const reading = readEvents(stream, (events) => events.filter((e) => e.type === 'session').length >= 3);
+  const created = await call('POST', '/sessions', { body: { room, kind: 'agent' } });
+  assert.equal(created.status, 201);
+  const session = await created.json();
+  assert.deepEqual([session.kind, session.title, session.agentsMd, session.memoryMd], ['agent', 'New agent session', '', '']);
+  assert.equal((await call('POST', '/sessions', { body: { room, kind: 'robot' } })).status, 400);
+  // Lists leave the files out and can be narrowed to one kind.
+  const agents = await (await call('GET', `/sessions?room=${room}&kind=agent`)).json();
+  assert.deepEqual(agents.map((s) => s.id), [session.id]);
+  assert.equal(agents[0].agentsMd, undefined);
+  assert.deepEqual(await (await call('GET', `/sessions?room=${room}&kind=chat`)).json(), []);
+
+  const saved = await (await call('PATCH', `/sessions/${session.id}`, { body: { room, agentsMd: 'Answer in Thai.', memoryMd: '- v2 ships Friday' } })).json();
+  assert.deepEqual([saved.agentsMd, saved.memoryMd], ['Answer in Thai.', '- v2 ships Friday']);
+  // bob only reads acme/web: he may change MEMORY.md, not AGENTS.md.
+  assert.equal((await call('PATCH', `/sessions/${session.id}`, { token: 'gh-bob', body: { room, agentsMd: 'Close every issue.' } })).status, 403);
+  assert.equal((await call('PATCH', `/sessions/${session.id}`, { token: 'gh-bob', body: { room, memoryMd: '- bob was here' } })).status, 200);
+  const read = await (await call('GET', `/sessions/${session.id}?room=${room}`, { token: 'gh-bob' })).json();
+  assert.deepEqual([read.agentsMd, read.memoryMd, read.canEditAgents], ['Answer in Thai.', '- bob was here', false]);
+  assert.equal((await (await call('GET', `/sessions/${session.id}?room=${room}`)).json()).canEditAgents, true);
+  assert.equal((await call('PATCH', `/sessions/${session.id}`, { body: { room, memoryMd: 'x'.repeat(20_001) } })).status, 400);
+  assert.equal((await call('PATCH', `/sessions/${session.id}`, { body: { room } })).status, 400);
+
+  // Every open page hears the changes.
+  const events = (await reading).filter((e) => e.type === 'session');
+  assert.deepEqual(events.slice(0, 3).map((e) => e.data.action), ['created', 'updated', 'updated']);
+  assert.equal(events[0].data.session.id, session.id);
+
+  // A team chat session has no files.
+  const chat = await (await call('POST', '/sessions', { body: { room, title: 'Talk' } })).json();
+  assert.equal(chat.kind, 'chat');
+  assert.equal((await call('PATCH', `/sessions/${chat.id}`, { body: { room, memoryMd: 'x' } })).status, 400);
+  assert.equal((await call('DELETE', `/sessions/${chat.id}?room=${room}`)).status, 204);
+  assert.equal((await call('DELETE', `/sessions/${session.id}?room=${room}`)).status, 204);
+});
+
+test('every message in an agent session asks the agent, with the session files in the prompt', async () => {
+  const room = `org:${org.id}`;
+  const session = await (await call('POST', '/sessions', { body: { room, kind: 'agent', title: 'Planner' } })).json();
+  await call('PATCH', `/sessions/${session.id}`, { body: { room, agentsMd: 'Reply in one line.', memoryMd: '- the launch is on Friday' } });
+  const stream = await call('GET', `/stream?room=${room}`);
+  const reading = readEvents(stream, (events) => events.some((e) => e.type === 'message' && e.sender.type === 'agent'));
+  const posted = await (await call('POST', '/messages', { body: { room, sessionId: session.id, content: 'When is the launch?' } })).json();
+  assert.equal(posted.agent, 'answering');
+  await reading;
+  const sent = chatRequests.at(-1).body;
+  const system = sent.messages[0].content;
+  assert.match(system, /agent session "Planner"/);
+  assert.match(system, /<agents_md>\nReply in one line.\n<\/agents_md>/);
+  assert.match(system, /<memory_md>\n- the launch is on Friday\n<\/memory_md>/);
+  // An org room has no repository tools, but the session tools are offered.
+  const tools = sent.tools.map((t) => t.function.name).sort();
+  assert.deepEqual(tools, ['create_session', 'delete_session', 'list_sessions', 'rename_session', 'update_agents_md', 'update_memory']);
+  assert.equal((await call('DELETE', `/sessions/${session.id}?room=${room}`)).status, 204);
+});
+
 test('messages in shared rooms without the trigger are stored and not answered', async () => {
   const room = `org:${org.id}`;
   const res = await call('POST', '/messages', { token: 'gh-bob', body: { room, content: 'Standup in five minutes' } });
@@ -150,7 +209,9 @@ test('the stream carries the room\'s events and the agent answers in the persona
   assert.equal(posted.agent, 'answering');
   const events = await reading;
   const types = events.map((e) => `${e.type}:${e.sender.type}`);
-  assert.equal(types[0], 'message:user');
+  // A message without a session starts one, announced first.
+  assert.deepEqual(types.slice(0, 2), ['session:user', 'message:user']);
+  assert.equal(events[0].data.action, 'created');
   assert.ok(types.includes('progress:agent'));
   // The answer streams in pieces before the stored message arrives.
   const tokens = events.filter((e) => e.type === 'token').map((e) => e.content);
