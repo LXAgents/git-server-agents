@@ -194,6 +194,35 @@ test('the Agent activity session is for the agent: answered without the trigger,
   assert.equal((await call('PATCH', `/sessions/${posted.sessionId}`, { body: { room, title: 'Mine now' } })).status, 403);
 });
 
+test('the summary names the room, model and key counts, and adds up stored usage', async () => {
+  const room = `org:${org.id}`;
+  const summary = await (await call('GET', `/summary?room=${room}`)).json();
+  assert.deepEqual(summary.room, { room, kind: 'org', name: 'acme', platform: 'github' });
+  assert.deepEqual([summary.model.provider, summary.model.providerName, summary.model.model], ['openai', 'OpenAI', 'gpt-chat']);
+  assert.deepEqual(summary.keys.ai, { repo: 0, org: 0, user: 1, total: 1 });
+  assert.equal(summary.keys.workspace.provider, 'github_codespaces');
+  assert.equal(summary.keys.workspace.total, 0);
+  // The activity answer above; bob's message is not an answer.
+  assert.deepEqual([summary.stats.answers, summary.stats.answersWithoutUsage, summary.stats.capped], [1, 0, false]);
+  // Keys are never in it, and strangers get nothing.
+  assert.doesNotMatch(JSON.stringify(summary), /sk-openai/);
+  assert.equal((await call('GET', `/summary?room=${room}`, { token: 'gh-stranger' })).status, 403);
+  // A GitLab user room has no workspace keys.
+  const carol = await (await call('GET', '/summary?room=user:7', { token: 'gl-carol', platform: 'gitlab' })).json();
+  assert.deepEqual([carol.room.name, carol.keys.workspace, carol.stats.answers], ['carol', null, 0]);
+});
+
+test('usage totals skip answers without usage and keep the cost honest', () => {
+  const { addUp } = require('../src/services/chat/chatSummary');
+  const row = (usage) => ({ data: usage === undefined ? null : JSON.stringify({ usage }) });
+  const stats = addUp([
+    row({ costUsd: 0.001, costComplete: true, inputTokens: 10, outputTokens: 5, tokensComplete: true }),
+    row({ costUsd: null, costComplete: false, inputTokens: 3, outputTokens: 1, tokensComplete: false }),
+    row(undefined),
+  ]);
+  assert.deepEqual(stats, { answers: 3, inputTokens: 13, outputTokens: 6, costUsd: 0.001, costComplete: false, tokensComplete: false, answersWithoutUsage: 1 });
+});
+
 test('without a key the agent answers with the error code', async () => {
   const stream = await call('GET', '/stream?room=user:1002', { token: 'gh-bob' });
   const reading = readEvents(stream, (events) => events.some((e) => e.sender.type === 'agent' && e.type === 'message'));

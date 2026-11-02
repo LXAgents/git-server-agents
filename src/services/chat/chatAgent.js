@@ -65,12 +65,18 @@ function toHistory(events, questionId) {
     .map((e) => (e.sender.type === 'agent' ? { role: 'assistant', content: e.content } : { role: 'user', content: `@${e.sender.login || 'user'}: ${parseComment(e.content).prompt || e.content}` }));
 }
 
-// The model, provider and keys for this room and asker.
-async function chooseModelAndKeys(room, user, model) {
+// Whose settings and keys apply for this room and asker: the asker's account, the room's org
+// (keys only for org members) and repository.
+async function roomScope(room, user) {
   const account = { type: user.platform, id: String(user.id) };
   const installation = room.installation || null;
   const orgMember = room.kind === 'org' || (installation ? await platforms.isOrgMember(user.platform, user.token, user, installation.orgName).catch(() => false) : false);
-  const repository = room.repository || null;
+  return { account, installation, orgMember, repository: room.repository || null };
+}
+
+// The model, provider and keys for this room and asker.
+async function chooseModelAndKeys(room, user, model) {
+  const { account, installation, orgMember, repository } = await roomScope(room, user);
   const chosen = model ? { provider: 'openrouter', model } : await models.resolveModel({ repository, installation, account }, 'text');
   const providerInfo = findProvider(chosen.provider);
   if (!providerInfo) throw new AgentError('BAD_REQUEST', `The stored provider ${chosen.provider} is not supported. Pick another one on the dashboard.`);
@@ -182,4 +188,4 @@ function maybeAnswer({ room, user, sessionId, question, activity = false }) {
   return { started: true, running };
 }
 
-module.exports = { maybeAnswer, readQuestion, toHistory, systemPrompt };
+module.exports = { maybeAnswer, readQuestion, toHistory, systemPrompt, roomScope };

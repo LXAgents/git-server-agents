@@ -61,4 +61,19 @@ async function firstKey(providerSlug, owners) {
   return null;
 }
 
-module.exports = { getProviderKeys, findProviderRow, firstKey };
+// How many active keys the provider has for each group the agent would try, without reading or
+// decrypting any key: { repo, org, user }. Same arguments as getProviderKeys; a null group is 0.
+async function countProviderKeys(providerSlug, account, appInstallation, repository = null) {
+  const provider = await findProviderRow(providerSlug);
+  if (!provider) return { repo: 0, org: 0, user: 0 };
+  const where = { providerId: provider.id, isActive: true };
+  const count = (owner) => (owner ? prisma.accountKey.count({ where: { ...where, ...owner } }) : 0);
+  const [repo, org, user] = await Promise.all([
+    count(repository && { repositoryId: repository.id }),
+    count(appInstallation && { appInstallationId: appInstallation.id }),
+    count(account && { accountType: account.type, accountId: account.id }),
+  ]);
+  return { repo, org, user };
+}
+
+module.exports = { getProviderKeys, countProviderKeys, findProviderRow, firstKey };

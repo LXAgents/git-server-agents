@@ -17,10 +17,13 @@ room. An open stream checks again every five minutes and closes once you lost ac
 ## Sessions and messages
 
 A room holds sessions (`ChatSession`: id, title, who started it, timestamps). Each session keeps
-its messages (`ChatMessage`: role `user` or `assistant`, type `message` or `report`, sender,
-content). Posting without a session starts one titled from the first line. In repo and org
-rooms only whoever started a session may delete it. Reports of answers to comments go to the
-room's "Agent activity" session.
+its messages (`ChatMessage`: role `user` or `assistant`, type `message` or `report`, sender and
+avatar, content, and the event's `data` as JSON). Posting without a session starts one titled
+from the first line. In repo and org rooms only whoever started a session may delete it.
+
+Each room has one "Agent activity" session (`activity: true` in the session list). Reports of
+answers to comments go there, and every message posted to it is for the agent, in any room, with
+no `@lxagents` needed. Post to it with `sessionId: "activity"`. It cannot be renamed or deleted.
 
 ## Events
 
@@ -28,8 +31,13 @@ The stream (`GET /api/chat/stream?room=...`) sends every event of every session 
 `data: <json>` lines:
 
 ```json
-{ "type": "message", "room": "repo:ck...", "sessionId": "ck...", "sender": { "id": "1001", "login": "alice", "type": "user" }, "content": "...", "timestamp": "2026-11-01T21:00:00.000Z" }
+{ "type": "message", "room": "repo:ck...", "sessionId": "ck...", "sender": { "id": "1001", "login": "alice", "type": "user", "avatarUrl": "https://..." }, "content": "...", "timestamp": "2026-11-01T21:00:00.000Z" }
 ```
+
+`avatarUrl` is there when the platform gave one. The agent's answers and reports carry
+`data: { model, provider, cost, usage }`, where `usage` is
+`{ costUsd, costComplete, inputTokens, outputTokens, tokensComplete }`, counted from the
+provider's reply (OpenRouter, OpenAI, DeepSeek and Anthropic report tokens; others may not).
 
 - `message`: a person or the agent wrote something (stored).
 - `report`: the agent finished something, such as an answer to a comment (stored).
@@ -51,6 +59,28 @@ provider is asked exactly as before.
 
 A `progress` event with `data.reset: true` starts a new model call: clear the text streamed so
 far. The stored `message` or `report` that follows is the final text.
+
+## Room summary
+
+`GET /api/chat/summary?room=...` is for the Chat page's details pane, and anyone who may read the
+room may read it:
+
+```json
+{
+  "room": { "room": "repo:ck...", "kind": "repo", "name": "acme/web", "platform": "github" },
+  "model": { "provider": "openai", "providerName": "OpenAI", "model": "gpt-5", "source": "repo" },
+  "keys": {
+    "ai": { "repo": 1, "org": 0, "user": 2, "total": 3 },
+    "workspace": { "provider": "github_codespaces", "providerName": "GitHub Codespaces", "repo": 0, "org": 1, "user": 0, "total": 1 }
+  },
+  "stats": { "answers": 12, "inputTokens": 48210, "outputTokens": 3920, "costUsd": 0.0841, "costComplete": false, "tokensComplete": true, "answersWithoutUsage": 2, "capped": false }
+}
+```
+
+The model and key counts are what the agent would use for you in this room (org keys only for
+org members). Keys are counted, never read. `workspace` is null on GitLab. `stats` adds up the
+newest 5000 answers and reports; answers stored before 1.19.0 and error replies count in
+`answersWithoutUsage`.
 
 ## How the agent answers
 

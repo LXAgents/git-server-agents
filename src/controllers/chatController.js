@@ -6,6 +6,7 @@ const bus = require('../services/chat/bus');
 const { emit } = require('../services/chat');
 const { userSender } = require('../services/chat/events');
 const chatAgent = require('../services/chat/chatAgent');
+const chatSummary = require('../services/chat/chatSummary');
 const { HttpError } = require('../errors');
 const log = require('../services/logService');
 const { logSafe } = require('../utils/strings');
@@ -20,6 +21,12 @@ function owner(user) {
 
 async function listRooms(req, res) {
   res.json(await rooms.listRooms(req.user));
+}
+
+// GET ?room=... The details pane: room, model and provider, key counts and usage totals.
+async function summary(req, res) {
+  const room = await rooms.authorizeRoom(req.user, req.query.room);
+  res.json(await chatSummary.summary(room, req.user));
 }
 
 async function listSessions(req, res) {
@@ -117,4 +124,4 @@ async function stream(req, res) {
   log.info('chat', `stream opened on a ${logSafe(room.kind)} room`, { platform: req.user.platform });
 }
 
-module.exports = { listRooms, listSessions, createSession, renameSession, deleteSession, listMessages, postMessage, stream };
+module.exports = { listRooms, summary, listSessions, createSession, renameSession, deleteSession, listMessages, postMessage, stream };
