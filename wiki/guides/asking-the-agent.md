@@ -103,7 +103,9 @@ commits and pushes a branch:
 - **Never the default branch:** `commit_workspace` refuses to push to it; ask for a pull request
   from the pushed branch instead.
 - **Server:** commands go through `gh codespace ssh`, so the server needs the `gh` CLI and an SSH
-  client (the Docker image has both). Errors come back as `NO_WORKSPACE_KEY`,
+  client (the Docker image has both). The command is sent as one quoted `bash -lc '...'` string,
+  because ssh joins separate arguments with spaces and the codespace would otherwise run only
+  the first word. Errors come back as `NO_WORKSPACE_KEY`,
   `WORKSPACE_ERROR` or `WORKSPACE_UNAVAILABLE`.
 
 ## Providers and keys (bring your own key)

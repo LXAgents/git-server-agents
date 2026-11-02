@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const childProcess = require('child_process');
+const { execFileSync } = require('child_process');
 
 let server;
 let cs;
@@ -90,7 +91,8 @@ test('runs commands through gh codespace ssh with only GH_TOKEN and basics in th
   const result = await cs.executeCommand('cs-2', 'npm test && echo "$HOME"', 'ghp_good');
   assert.deepEqual(result, { stdout: 'out', stderr: 'err', exitCode: 2, timedOut: false });
   assert.equal(calls[0].file, 'gh');
-  assert.deepEqual(calls[0].args, ['codespace', 'ssh', '-c', 'cs-2', '--', 'bash', '-lc', 'npm test && echo "$HOME"']);
+  // One argument after --, because ssh joins the rest with spaces anyway.
+  assert.deepEqual(calls[0].args, ['codespace', 'ssh', '-c', 'cs-2', '--', `bash -lc 'npm test && echo "$HOME"'`]);
   assert.equal(calls[0].opts.env.GH_TOKEN, 'ghp_good');
   assert.equal(calls[0].opts.env.ENCRYPTION_KEY, undefined);
   assert.ok(calls[0].opts.timeout > 0);
@@ -100,4 +102,34 @@ test('says so when gh is not installed', async (t) => {
   t.mock.method(childProcess, 'execFile', (_f, _a, _o, cb) => cb(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })));
   await assert.rejects(cs.executeCommand('cs-2', 'ls', 'ghp_good'), { code: 'WORKSPACE_UNAVAILABLE' });
   await assert.rejects(cs.executeCommand('cs-2', '  ', 'ghp_good'), { code: 'BAD_INPUT' });
+});
+
+// ssh joins the arguments after the host with spaces and the remote login shell runs that line.
+// Doing the same with a real local bash shows what the codespace would run.
+function runLikeSsh(args) {
+  const line = args.slice(args.indexOf('--') + 1).join(' ');
+  return execFileSync('bash', ['-c', line], { env: { PATH: process.env.PATH, HOME: '/home/codespace' }, encoding: 'utf8' });
+}
+
+test('every word of the command reaches the codespace shell, not only the first', async (t) => {
+  const calls = [];
+  t.mock.method(childProcess, 'execFile', (_f, args, _o, cb) => {
+    calls.push(args);
+    cb(null, '', '');
+  });
+  const commands = {
+    "printf '%s|' init -y": 'init|-y|',
+    'printf "%s|" a "b c" && echo "$HOME"': 'a|b c|/home/codespace\n',
+    'echo "it\'s"   spaced': "it's spaced\n",
+    'printf "%s\n" one; printf "%s\n" two': 'one\ntwo\n',
+  };
+  for (const [command, expected] of Object.entries(commands)) {
+    await cs.executeCommand('cs-3', command, 'ghp_good');
+    assert.equal(runLikeSsh(calls.at(-1)), expected, command);
+  }
+});
+
+test('shellQuote keeps quotes and shell characters literal', () => {
+  assert.equal(cs.shellQuote("a'b"), `'a'\\''b'`);
+  assert.equal(execFileSync('bash', ['-c', `printf %s ${cs.shellQuote(`$HOME "x" 'y' \`id\` ; &&`)}`], { encoding: 'utf8' }), `$HOME "x" 'y' \`id\` ; &&`);
 });

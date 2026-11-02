@@ -127,14 +127,22 @@ function childEnv(token) {
   return env;
 }
 
-// Runs `command` inside the codespace with `gh codespace ssh -c <name> -- bash -lc <command>`.
-// No shell runs on this host: the arguments go to gh as they are, and only the codespace's own
-// shell reads the command. Resolves to { stdout, stderr, exitCode, timedOut } for any exit code;
-// rejects only when gh cannot be started.
+// POSIX single quotes: the text stays literal, and each ' becomes '\'' (close, escaped quote, reopen).
+function shellQuote(text) {
+  return `'${String(text).replaceAll("'", "'\\''")}'`;
+}
+
+// Runs `command` inside the codespace with `gh codespace ssh -c <name> -- "bash -lc '<command>'"`.
+// ssh does not keep arguments apart: it joins everything after the host with spaces and the
+// codespace's login shell splits that line again. Passing `bash`, `-lc` and the command as
+// separate arguments made `npm init -y` run as `bash -lc npm` (only the first word), so the
+// command goes as one quoted string. No shell runs on this host: execFile hands the argument to
+// gh as it is. Resolves to { stdout, stderr, exitCode, timedOut } for any exit code; rejects only
+// when gh cannot be started.
 function executeCommand(codespaceName, command, token, { timeoutMs = config.workspace.execTimeoutMs, ghPath = config.workspace.ghPath } = {}) {
   const name = requireName(codespaceName);
   if (typeof command !== 'string' || !command.trim()) return Promise.reject(new CodespacesError('a command is required', { code: 'BAD_INPUT' }));
-  const args = ['codespace', 'ssh', '-c', name, '--', 'bash', '-lc', command];
+  const args = ['codespace', 'ssh', '-c', name, '--', `bash -lc ${shellQuote(command)}`];
   return new Promise((resolve, reject) => {
     childProcess.execFile(ghPath, args, { env: childEnv(token), timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       if (err && err.code === 'ENOENT') {
@@ -149,4 +157,4 @@ function executeCommand(codespaceName, command, token, { timeoutMs = config.work
   });
 }
 
-module.exports = { createCodespace, getCodespaceStatus, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv, isValidBranch };
+module.exports = { createCodespace, getCodespaceStatus, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv, isValidBranch, shellQuote };
