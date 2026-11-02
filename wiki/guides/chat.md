@@ -16,14 +16,38 @@ room. An open stream checks again every five minutes and closes once you lost ac
 
 ## Sessions and messages
 
-A room holds sessions (`ChatSession`: id, title, who started it, timestamps). Each session keeps
+A room holds sessions (`ChatSession`: id, title, kind, who started it, timestamps). Each session keeps
 its messages (`ChatMessage`: role `user` or `assistant`, type `message` or `report`, sender and
 avatar, content, and the event's `data` as JSON). Posting without a session starts one titled
 from the first line. In repo and org rooms only whoever started a session may delete it.
 
-Each room has one "Agent activity" session (`activity: true` in the session list). Reports of
-answers to comments go there, and every message posted to it is for the agent, in any room, with
-no `@lxagents` needed. Post to it with `sessionId: "activity"`. It cannot be renamed or deleted.
+A session's `kind` is `chat` (the team chat pane) or `agent` (the Agent work pane). Every message
+posted to an agent session is for the agent, in any room, with no `@lxagents` needed.
+
+Each room has one "Agent activity" session (`activity: true`, kind `agent`). Reports of answers
+to comments go there. Post to it with `sessionId: "activity"`. It cannot be renamed or deleted.
+Any number of other agent sessions can be started next to it (`POST /sessions` with
+`kind: "agent"`).
+
+### AGENTS.md and MEMORY.md
+
+Every agent session has its own two files, up to 20,000 characters each, read with
+`GET /sessions/:id` and changed with `PATCH /sessions/:id`:
+
+- **AGENTS.md**: the people's instructions for the agent in this session ("answer in Thai",
+  "always open a pull request"). It goes into the agent's prompt. In a repository room only
+  people with write access may change it, because a reader's instructions must not steer a
+  writer's tools.
+- **MEMORY.md**: the agent's notes for later answers in this session. It goes into the prompt as
+  notes (data, not instructions), and the agent keeps it current with its `update_memory` tool.
+  Anyone in the room may change it.
+
+### Several people in one session
+
+Everyone who may join a repository or organization room sees its sessions live and may post in
+them. While the agent answers one question in a session, later questions wait in order (up to
+five; `agent: "queued"`) instead of being refused, and each is answered with its own asker's
+access and keys. A sixth waiting question is refused with a message (`agent: "busy"`).
 
 ## Events
 
@@ -44,6 +68,10 @@ provider's reply (OpenRouter, OpenAI, DeepSeek and Anthropic report tokens; othe
 - `progress`: what the agent is doing, with `data: { status, tool }`, for example
   `{ "status": "Creating GitHub Codespace...", "tool": "create_workspace" }` (live only).
 - `token`: a piece of the agent's answer while it is written (live only).
+- `session`: a session was created, renamed, changed or deleted, by a person or the agent, with
+  `data: { action: "created" | "renamed" | "updated" | "deleted", session }` (live only).
+  Refresh the session lists. Progress events of an answer carry `data.asker`, the login being
+  answered.
 
 Read the stream with `fetch` and the `Authorization` header; `EventSource` cannot send it, and
 the token never goes in a URL.
@@ -98,8 +126,15 @@ gives the agent the same tools as an answer to a comment (see [Asking the agent]
   anything.
 - On GitHub, for writers with a workspace key, the workspace tools.
 
-Organization and personal rooms have no repository, so the agent has no tools there. One answer at
-a time per session.
+Organization and personal rooms have no repository, so the agent has no repository tools there.
+
+In every room the agent also has the session tools, acting as the asker under the same rules as
+the API: `list_sessions`, `create_session` (an agent or chat session), `rename_session` and
+`delete_session` (only when asked; never the Agent activity session or the session being
+answered). In an agent session it also has `update_memory` (append or replace MEMORY.md) and,
+for people who may change it, `update_agents_md`.
+
+One answer at a time per session; later questions wait (see above).
 
 ## Limits
 

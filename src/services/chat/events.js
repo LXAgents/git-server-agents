@@ -1,10 +1,12 @@
 // The chat's one event shape:
-//   { type: 'message' | 'progress' | 'report' | 'token', room, sessionId, sender: { id, login, type, avatarUrl? },
+//   { type: 'message' | 'progress' | 'report' | 'token' | 'session', room, sessionId, sender: { id, login, type, avatarUrl? },
 //     content, data?, timestamp }
 // sender.type is "user" or "agent". `room` is the room as the client named it ("user:1001",
 // "repo:<id>", "org:<id>"). "token" carries a piece of the agent's answer while it is written.
+// "session" (live only) says a session was created, renamed, changed or deleted:
+// data { action: 'created' | 'renamed' | 'updated' | 'deleted', session }.
 const AGENT = Object.freeze({ id: 'lxagents', login: 'LXAgents', type: 'agent' });
-const TYPES = new Set(['message', 'progress', 'report', 'token']);
+const TYPES = new Set(['message', 'progress', 'report', 'token', 'session']);
 
 function makeEvent({ type, room, sessionId = null, sender, content = '', data, timestamp = new Date() }) {
   if (!TYPES.has(type)) throw new Error(`unknown chat event type ${type}`);

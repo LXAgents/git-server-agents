@@ -72,12 +72,13 @@ see [Chat rooms](../guides/chat.md).
 |---|---|---|
 | GET | `/rooms` | `{ user, orgs, repos }`: the rooms you may join now |
 | GET | `/summary?room=` | `{ room, model, keys, stats }`: the model the agent would use, key counts (never keys), and the tokens and cost of stored answers |
-| GET | `/sessions?room=` | The room's sessions, latest first |
-| POST | `/sessions` | `{ room, title? }` |
-| PATCH | `/sessions/:id` | `{ room, title }`; not the Agent activity session |
+| GET | `/sessions?room=&kind=` | The room's sessions, latest first; `kind` is `chat` or `agent` to list one kind |
+| GET | `/sessions/:id?room=` | One session; an agent session with `agentsMd`, `memoryMd`, plus `canEditAgents` |
+| POST | `/sessions` | `{ room, title?, kind? }`, `kind` `chat` (default) or `agent` |
+| PATCH | `/sessions/:id` | `{ room, title?, agentsMd?, memoryMd? }`; the Agent activity session cannot be renamed; `agentsMd` only for writers in repo rooms; each file up to 20,000 characters |
 | DELETE | `/sessions/:id?room=` | Only the starter in repo and org rooms; never the Agent activity session |
 | GET | `/messages?room=&sessionId=` | The session's last 200 stored messages, oldest first |
-| POST | `/messages` | `{ room, sessionId?, content }`, where `sessionId: "activity"` posts to the room's Agent activity session; 201 `{ message, sessionId, agent: "answering" \| "busy" \| "idle" }` |
+| POST | `/messages` | `{ room, sessionId?, content }`, where `sessionId: "activity"` posts to the room's Agent activity session; 201 `{ message, sessionId, agent: "answering" \| "queued" \| "busy" \| "idle" }` |
 | GET | `/stream?room=` | Server-Sent Events for every session in the room |
 
 ## Command line (on the server host)
