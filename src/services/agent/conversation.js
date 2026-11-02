@@ -54,6 +54,12 @@ const TOOL_STATUS = {
   exec_command: (a) => `Running: ${String(a.command || '').slice(0, 120)}`,
   commit_workspace: (a) => `Committing and pushing to ${a.branchName || 'a branch'}...`,
   delete_workspace: 'Deleting the workspace...',
+  list_sessions: 'Listing the sessions...',
+  create_session: (a) => `Creating session ${a.title ? `"${String(a.title).slice(0, 60)}"` : ''}...`,
+  rename_session: (a) => `Renaming a session to "${String(a.title || '').slice(0, 60)}"...`,
+  delete_session: 'Deleting a session...',
+  update_memory: 'Updating MEMORY.md...',
+  update_agents_md: 'Updating AGENTS.md...',
 };
 
 function toolStatus(name, rawArgs) {

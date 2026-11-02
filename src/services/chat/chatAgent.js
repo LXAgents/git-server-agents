@@ -1,11 +1,14 @@
 // The agent answering in a chat room. In a user room every message is for the agent; in repo
 // and org rooms only messages that start with "@lxagents" (or name an OpenRouter model), except in
-// the room's Agent activity session, where every message is for the agent too. The
+// agent sessions (the Agent activity session and the ones in the Agent work pane), where every
+// message is for the agent too. Questions asked while it answers in the same session wait in
+// order, each answered with its own asker's access and keys. The
 // model, provider and keys follow the room: a repo room uses the repository's, then the org's
 // (for org members), then the asker's own; an org room the org's, then the asker's; a user room
 // the asker's own. A repo room also gets the read tools at the default branch, the tools that read
 // issues, pull requests and commits the message mentions, and, for writers, the tools that create,
-// close and reopen issues and pull requests, plus the workspace tools on GitHub with a key.
+// close and reopen issues and pull requests, plus the workspace tools on GitHub with a key. Every
+// room gets the session tools; an agent session adds its AGENTS.md and MEMORY.md to the prompt.
 const config = require('../../config');
 const models = require('../ai/modelService');
 const keys = require('../keyService');
@@ -25,6 +28,9 @@ const { parseLoopLimit } = require('../agent/loopLimit');
 const { chatWithFallback } = require('../agent/keyFallback');
 const { converse } = require('../agent/conversation');
 const { newSpend, formatCost, usageData } = require('../agent/cost');
+const { failureText } = require('../agent/repoTools');
+const { createSessionTools, sessionGuide } = require('./sessionTools');
+const { mayEditAgents } = require('./sessions');
 const store = require('./chatStore');
 const { AGENT, makeEvent } = require('./events');
 const bus = require('./bus');
@@ -33,8 +39,11 @@ const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
 
 const HISTORY_MESSAGES = 40;
-// One answer at a time per session: a second question waits for the first answer.
-const busy = new Set();
+// Questions that may wait behind the one being answered in a session.
+const MAX_QUEUED = 5;
+// One answer at a time per session: sessionId -> { tail: Promise, waiting: number }. Later
+// questions are chained after the running answer.
+const queues = new Map();
 
 // Whether `text` asks the agent, and the question without the trigger. In a user room, and in any
 // room's Agent activity session (`activity`), every message is for the agent.
@@ -59,16 +68,18 @@ function systemPrompt(room, user) {
     room.kind === 'repo' && !isWriter(room)
       ? `@${user.login} can only read ${room.name}, so you cannot create, close or reopen its issues or pull requests for them. Say so if they ask, and suggest someone with write access asks.`
       : null,
-    room.kind !== 'repo' ? 'This room has no repository, so you have no tools here. To change issues or pull requests, the user should ask in that repository\'s room.' : null,
+    room.kind !== 'repo' ? 'This room has no repository, so you have no repository tools here. To change issues or pull requests, the user should ask in that repository\'s room.' : null,
   ]
     .filter(Boolean)
     .join('\n');
 }
 
-// Earlier messages of the session as chat messages, without the question being answered.
+// Earlier messages of the session as chat messages: the ones before the question being answered
+// (questions queued after it are left out).
 function toHistory(events, questionId) {
-  return events
-    .filter((e) => e.id !== questionId && e.type === 'message')
+  const at = events.findIndex((e) => e.id === questionId);
+  return (at === -1 ? events : events.slice(0, at))
+    .filter((e) => e.type === 'message')
     .slice(-HISTORY_MESSAGES)
     .map((e) => (e.sender.type === 'agent' ? { role: 'assistant', content: e.content } : { role: 'user', content: `@${e.sender.login || 'user'}: ${parseComment(e.content).prompt || e.content}` }));
 }
@@ -136,6 +147,26 @@ async function roomTools(room, user, choice, send, prompt, sessionId = null) {
   return { repo, workspace, guide: { manage: Boolean(actions), thread, readTools: Object.keys(reader) } };
 }
 
+// The repository tools (or none, outside repo rooms) plus the session tools, as one set for the
+// tool loop.
+function withSessionTools(repo, session) {
+  async function run(name, rawArgs) {
+    if (!Object.hasOwn(session.handlers, name)) return repo ? repo.run(name, rawArgs) : `Error: unknown tool ${name}.`;
+    let args = {};
+    try {
+      args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || '{}') : rawArgs || {};
+    } catch {
+      return 'Error: the tool arguments were not valid JSON.';
+    }
+    try {
+      return await session.handlers[name](args || {});
+    } catch (err) {
+      return failureText(name, err);
+    }
+  }
+  return { tools: [...(repo ? repo.tools : []), ...session.tools], run, inlineContext: repo ? repo.inlineContext : async () => '' };
+}
+
 // Answers `question` (a stored user event) in its session. Never throws: failures are posted to
 // the session as the agent's message, with the same codes as comment replies.
 async function answer({ room, user, sessionId, question, prompt, model, send }) {
@@ -148,6 +179,9 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
     chosenModel = choice.model;
     const tools = await roomTools(room, user, choice, send, prompt, sessionId);
     workspace = tools.workspace;
+    // Read when the answer starts, so a queued question sees the MEMORY.md the last answer wrote.
+    const current = await store.requireSession(room.key, sessionId);
+    const sessionSet = createSessionTools({ room, user, current });
     const { rounds } = parseLoopLimit(prompt);
     const limitMs = workspace ? config.workspace.taskTimeoutMs : config.ai.taskTimeoutMs;
     const request = {
@@ -162,7 +196,7 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
       onToken: (text) => send.live({ type: 'token', sender: AGENT, content: text }),
       onTool: ({ tool, status }) => send.live({ type: 'progress', sender: AGENT, content: status, data: { status, tool } }),
       // Each model call starts a new piece of text: the client clears what it streamed so far.
-      onRound: () => send.live({ type: 'progress', sender: AGENT, content: 'Thinking...', data: { status: 'Thinking...', model: choice.model, reset: true } }),
+      onRound: () => send.live({ type: 'progress', sender: AGENT, content: 'Thinking...', data: { status: 'Thinking...', model: choice.model, reset: true, asker: user.login } }),
     };
     const history = toHistory(await store.history(sessionId, room.room), question.id);
     const text = await chatWithFallback(
@@ -172,11 +206,16 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
           request,
           apiKey: key.apiKey,
           system: systemPrompt(room, user),
-          toolGuide: tools.repo ? buildToolGuide({ rounds, ...tools.guide, workspace: Boolean(workspace), reusedWorkspace: workspace && workspace.reused }) : '',
+          toolGuide: [
+            tools.repo ? buildToolGuide({ rounds, ...tools.guide, workspace: Boolean(workspace), reusedWorkspace: workspace && workspace.reused }) : null,
+            sessionGuide(current, { canEditAgents: mayEditAgents(room) }),
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
           maxRounds: rounds,
           history,
           question: `@${user.login}: ${prompt}`,
-          repo: tools.repo,
+          repo: withSessionTools(tools.repo, sessionSet),
         }),
       logMeta
     );
@@ -195,23 +234,48 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
   }
 }
 
-// Starts an answer when the message asks for one. Resolves at once with whether it started;
-// the answer arrives on the room as events.
+// Runs `task` after the answers already running or waiting in session `sessionId`. Returns
+// { state: "answering" | "queued" | "busy", running }: "busy" when MAX_QUEUED already wait (the
+// task is not run), `running` the promise of the task.
+function enqueue(sessionId, task) {
+  const queue = queues.get(sessionId) || { tail: Promise.resolve(), waiting: 0, running: false };
+  if (queue.running && queue.waiting >= MAX_QUEUED) return { state: 'busy', running: null };
+  const queued = queue.running;
+  if (queued) queue.waiting += 1;
+  queue.running = true;
+  queues.set(sessionId, queue);
+  const run = () => {
+    if (queued) queue.waiting -= 1;
+    return task();
+  };
+  const running = queue.tail.then(run, run);
+  queue.tail = running;
+  const done = () => {
+    // The last task in line ends the queue.
+    if (queue.tail === running) queues.delete(sessionId);
+  };
+  running.then(done, done);
+  return { state: queued ? 'queued' : 'answering', running };
+}
+
+// Starts an answer when the message asks for one, or queues it behind the answer running in the
+// same session. Returns at once with `agent`: "answering", "queued", "busy" (the queue is full)
+// or "idle" (not asked), and `running`, the promise of this answer; the answer arrives on the
+// room as events.
 function maybeAnswer({ room, user, sessionId, question, activity = false }) {
   const ask = readQuestion(room.kind, question.content, activity);
-  if (!ask.asks) return { started: false };
+  if (!ask.asks) return { agent: 'idle', started: false };
   const target = { key: room.key, room: room.room, sessionId };
   const send = {
     send: (fields) => emit(target, fields),
     live: (fields) => bus.publish(room.key, makeEvent({ ...fields, room: room.room, sessionId })),
   };
-  if (busy.has(sessionId)) {
-    void send.send({ type: 'message', sender: AGENT, content: 'I am still answering the previous question in this session. Ask again when that answer is in, or start a new session.' });
-    return { started: false, busy: true };
+  const { state, running } = enqueue(sessionId, () => answer({ room, user, sessionId, question, prompt: ask.prompt, model: ask.model, send }));
+  if (state === 'busy') {
+    void send.send({ type: 'message', sender: AGENT, content: `${MAX_QUEUED} questions are already waiting in this session. Ask again when those answers are in, or start a new session.` });
+    return { agent: 'busy', started: false, busy: true };
   }
-  busy.add(sessionId);
-  const running = answer({ room, user, sessionId, question, prompt: ask.prompt, model: ask.model, send }).finally(() => busy.delete(sessionId));
-  return { started: true, running };
+  return { agent: state, started: true, queued: state === 'queued', running };
 }
 
-module.exports = { maybeAnswer, readQuestion, toHistory, systemPrompt, roomScope, roomTools };
+module.exports = { maybeAnswer, enqueue, readQuestion, toHistory, systemPrompt, roomScope, roomTools, withSessionTools, MAX_QUEUED };
