@@ -60,13 +60,15 @@ function view(data) {
 }
 
 // POST /repos/{owner}/{repo}/codespaces. `branch` may be left out for the default branch.
-async function createCodespace(repoFullName, branch, token, { idleTimeoutMinutes = config.workspace.idleTimeoutMinutes } = {}) {
+async function createCodespace(repoFullName, branch, token, { idleTimeoutMinutes = config.workspace.idleTimeoutMinutes, retentionMinutes = config.workspace.keepMinutes } = {}) {
   if (typeof repoFullName !== 'string' || !REPO_NAME.test(repoFullName)) throw new CodespacesError('repository must be "owner/name"', { code: 'BAD_INPUT' });
   if (branch !== undefined && branch !== null && !isValidBranch(branch)) {
     throw new CodespacesError(`"${branch}" is not a valid branch name`, { code: 'BAD_INPUT' });
   }
   const [owner, repo] = repoFullName.split('/');
-  const body = { idle_timeout_minutes: idleTimeoutMinutes };
+  // retention_period_minutes: GitHub deletes the codespace this long after it stops, so a kept
+  // one never outlives the keep window by much, even when the server forgets it.
+  const body = { idle_timeout_minutes: idleTimeoutMinutes, retention_period_minutes: retentionMinutes };
   if (branch) body.ref = branch;
   try {
     const { data } = await axios.post(`${config.github.apiUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/codespaces`, body, { headers: headers(token) });
@@ -84,6 +86,17 @@ async function getCodespaceStatus(codespaceName, token) {
     return view(data);
   } catch (err) {
     throw wrap(err, `read codespace ${name}`);
+  }
+}
+
+// POST /user/codespaces/{codespace_name}/start: wakes a codespace GitHub stopped for being idle.
+async function startCodespace(codespaceName, token) {
+  const name = requireName(codespaceName);
+  try {
+    const { data } = await axios.post(`${config.github.apiUrl}/user/codespaces/${encodeURIComponent(name)}/start`, {}, { headers: headers(token) });
+    return view(data);
+  } catch (err) {
+    throw wrap(err, `start codespace ${name}`);
   }
 }
 
@@ -157,4 +170,4 @@ function executeCommand(codespaceName, command, token, { timeoutMs = config.work
   });
 }
 
-module.exports = { createCodespace, getCodespaceStatus, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv, isValidBranch, shellQuote };
+module.exports = { createCodespace, getCodespaceStatus, startCodespace, deleteCodespace, waitUntilAvailable, executeCommand, CodespacesError, childEnv, isValidBranch, shellQuote };

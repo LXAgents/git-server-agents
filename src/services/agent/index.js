@@ -119,6 +119,8 @@ async function workspaceFor(task, comment, access, choice, manage, head, ctx) {
       defaultBranch: comment.defaultBranch,
       branch: head || null,
       keys,
+      // The next comment on the same issue or pull request reuses the codespace.
+      scope: `${task.platform}:${comment.repo}#${comment.number}`,
       logMeta: taskMeta(task),
       onProgress: (step) => ctx.chat && ctx.chat.progress(step),
     });
@@ -183,7 +185,7 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
           request,
           apiKey: key.apiKey,
           system: buildSystemPrompt(comment, diff, { head, base, sha: ref !== comment.defaultBranch ? ref : null }),
-          toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader), workspace: Boolean(workspace) }),
+          toolGuide: buildToolGuide({ rounds, manage: Boolean(actions), thread: comment, readTools: Object.keys(reader), workspace: Boolean(workspace), reusedWorkspace: workspace && workspace.reused }),
           maxRounds: rounds,
           history: buildHistory(thread, comment.commentId),
           question: `@${comment.author || identity.triggerUser || 'user'}: ${parsed.prompt}`,
@@ -192,7 +194,8 @@ async function answerComment(task, payload, comment, parsed, identity, access, c
       request.logMeta
     );
   } finally {
-    // Codespaces bill their key's owner: none outlives the answer that opened it.
+    // Codespaces bill their key's owner: the one used last is kept for WORKSPACE_KEEP_MINUTES for
+    // the next comment on this thread, and the rest are deleted now.
     if (workspace) await workspace.cleanup();
   }
 

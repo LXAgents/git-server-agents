@@ -96,10 +96,15 @@ commits and pushes a branch:
   org members. Without a key you may use, the tools are not offered.
 - **Who pays:** the codespace runs on the key owner's account and bills it. Pushes are made as
   the key's owner.
-- **Limits:** at most two codespaces per answer, only codespaces the answer created can be
-  reached, and every codespace still open is deleted when the answer ends. GitHub also stops an
-  idle one after `WORKSPACE_IDLE_TIMEOUT_MINUTES`. Such an answer may take up to
-  `WORKSPACE_TASK_TIMEOUT_MS` (15 minutes) instead of 4.
+- **Limits:** at most two codespaces per answer, and only codespaces of the same conversation can
+  be reached. Such an answer may take up to `WORKSPACE_TASK_TIMEOUT_MS` (15 minutes) instead of 4.
+- **Kept between messages:** when an answer ends, the codespace it used last stays for
+  `WORKSPACE_KEEP_MINUTES` (default 60) and the next message in the same chat session, or the next
+  comment on the same issue or pull request, picks it up with the earlier work still in it; any
+  other codespace is deleted. Only someone who may use the same workspace key can pick it up.
+  GitHub stops an idle one after `WORKSPACE_IDLE_TIMEOUT_MINUTES`; the agent starts it again when
+  it is needed. After the keep window it is deleted, and GitHub deletes it by itself too (its
+  retention period), even if the server restarted.
 - **Never the default branch:** `commit_workspace` refuses to push to it; ask for a pull request
   from the pushed branch instead.
 - **Server:** commands go through `gh codespace ssh`, so the server needs the `gh` CLI and an SSH
