@@ -25,6 +25,7 @@ Every setting is an environment variable, read from `.env` in development or fro
 | `WORKSPACE_BOOT_TIMEOUT_MS` | How long `create_workspace` waits for a codespace to become Available (default 300000) |
 | `WORKSPACE_EXEC_TIMEOUT_MS` | The limit for one `exec_command` (default 300000) |
 | `WORKSPACE_IDLE_TIMEOUT_MINUTES` | GitHub stops an idle codespace after this many minutes, 5 to 240 (default 10) |
+| `WORKSPACE_KEEP_MINUTES` | How long the codespace an answer used last is kept for the next message of the same chat session or issue/pull request thread, 0 to 43200 (default 60; 0 deletes it when the answer ends). Also sent to GitHub as the retention period, so GitHub deletes it after a server restart |
 | `GH_PATH` | The gh CLI used for `gh codespace ssh` (default `gh`; the Docker image installs it with an SSH client) |
 | `PLATFORM_TIMEOUT_MS` | Limit for each GitHub or GitLab API call (default 30000) |
 | `LOG_RETENTION_DAYS` | Days stored log lines are kept for the dashboard's Logs page (default 14) |

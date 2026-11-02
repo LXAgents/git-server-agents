@@ -3,9 +3,12 @@
 // with write access, and only when a workspace key they may use exists (see agent/index.js).
 //
 // Zero trust: keys arrive as handles (workspaceKeyService); each call decrypts the key right
-// before it is used. The tools only touch codespaces they created in this answer, never another
-// codespace the key's owner has, and cleanup() deletes whatever is left when the answer ends.
+// before it is used. The tools only touch codespaces they created, in this answer or in an
+// earlier answer of the same conversation (`scope`), never another codespace the key's owner
+// has. When the answer ends, cleanup() keeps the last one used for the next message of the
+// conversation (workspaceKeeper) and deletes the rest.
 const codespaces = require('../platforms/githubCodespacesService');
+const keeper = require('./workspaceKeeper');
 const { ToolInputError } = require('./threadActions');
 const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
@@ -45,7 +48,7 @@ const WORKSPACE_TOOLS = [
     },
     ['workspaceId', 'commitMessage', 'branchName']
   ),
-  fn('delete_workspace', 'Delete a workspace when the work is done. Workspaces left open are deleted when this answer ends.', { workspaceId: WORKSPACE_ID }, ['workspaceId']),
+  fn('delete_workspace', 'Delete a workspace when it is no longer needed. Otherwise the last one used stays open for the next message of this conversation, and the others are deleted when this answer ends.', { workspaceId: WORKSPACE_ID }, ['workspaceId']),
 ];
 
 // Keeps the end of long output (where errors usually are) and says how much was cut. The
@@ -81,13 +84,27 @@ function failure(name, err) {
 }
 
 // `repo` is "owner/name", `defaultBranch` the repository's, `branch` the one being discussed (the
-// PR head) or null. `keys` are workspace key handles in fallback order. `onProgress({ status,
-// tool })` hears each step, for the chat. Returns { handlers, cleanup, openWorkspaces }: the handlers are named like the tools.
-function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys, onProgress = () => {}, logMeta } = {}) {
+// PR head) or null. `keys` are workspace key handles in fallback order. `scope` names the
+// conversation (a chat session or an issue/PR thread): a codespace kept from its last answer is
+// reused, and the one used last is kept for the next. `onProgress({ status, tool })` hears each
+// step, for the chat. Returns { handlers, cleanup, openWorkspaces, reused }: the handlers are
+// named like the tools, and `reused` is the kept codespace this answer starts with, or null.
+function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys, scope = null, onProgress = () => {}, logMeta } = {}) {
   if (!keys || keys.length === 0) throw new Error('workspace tools need at least one workspace key');
-  // workspaceId -> the handle of the key that created it. A handle holds no token: reveal()
-  // reads and decrypts the row again for every call.
+  // workspaceId -> { key, branch, checked }. The key is the handle that created it; a handle
+  // holds no token: reveal() reads and decrypts the row again for every call. `checked` is false
+  // for a kept codespace until it has been seen running in this answer.
   const owned = new Map();
+  // The workspace used last: the one kept for the next message.
+  let lastUsed = null;
+
+  const kept = keeper.take(scope, { repo, keyIds: keys.map((k) => k.id) });
+  if (kept) {
+    const key = keys.find((k) => k.id === kept.key.id);
+    owned.set(kept.name, { key, branch: kept.branch, checked: false });
+    lastUsed = kept.name;
+    log.info('agent', `reusing codespace ${logSafe(kept.name)} for ${logSafe(repo)}`, logMeta);
+  }
 
   const progress = (tool, status) => {
     try {
@@ -96,11 +113,39 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
       // Progress is best effort.
     }
   };
-  const ownedKey = (workspaceId) => {
-    const key = owned.get(String(workspaceId || ''));
-    if (!key) throw new ToolInputError(`${workspaceId || 'no workspaceId'} is not a workspace this answer created`);
-    return key;
+  const ownedEntry = (workspaceId) => {
+    const entry = owned.get(String(workspaceId || ''));
+    if (!entry) throw new ToolInputError(`${workspaceId || 'no workspaceId'} is not a workspace of this conversation`);
+    return entry;
   };
+
+  // A kept codespace may have been stopped by GitHub (idle) or deleted since the last answer.
+  // Checks it once per answer: wakes a stopped one and waits until it is Available, and forgets
+  // one that is gone. Resolves to its state.
+  async function ensureRunning(name) {
+    const entry = ownedEntry(name);
+    if (entry.checked) return 'Available';
+    let status;
+    try {
+      status = await codespaces.getCodespaceStatus(name, await entry.key.reveal());
+    } catch (err) {
+      if (err.response && err.response.status === 404) {
+        owned.delete(name);
+        if (lastUsed === name) lastUsed = null;
+        throw new ToolInputError(`codespace ${name} no longer exists; create a new workspace`);
+      }
+      throw err;
+    }
+    if (status.state !== 'Available') {
+      if (['Shutdown', 'ShuttingDown'].includes(status.state)) {
+        progress('create_workspace', `Starting codespace ${name} again...`);
+        await codespaces.startCodespace(name, await entry.key.reveal());
+      }
+      await codespaces.waitUntilAvailable(name, () => entry.key.reveal(), { onState: (state) => progress('create_workspace', `Codespace ${name} is ${state}`) });
+    }
+    entry.checked = true;
+    return 'Available';
+  }
 
   async function createWithFallback(ref) {
     let lastError;
@@ -119,11 +164,22 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
   }
 
   async function createWorkspace(args) {
-    if (owned.size >= MAX_WORKSPACES) throw new ToolInputError(`this answer already has ${owned.size} workspaces; reuse or delete one`);
     const ref = args.branch ? String(args.branch).trim() : branch || defaultBranch || null;
+    // A codespace of this conversation is reused rather than a new one started, unless another
+    // branch is asked for.
+    const reusable = [...owned].find(([, entry]) => !args.branch || entry.branch === ref);
+    if (reusable) {
+      const [name, entry] = reusable;
+      const state = await ensureRunning(name);
+      lastUsed = name;
+      progress('create_workspace', `Reusing codespace ${name}`);
+      return JSON.stringify({ workspaceId: name, state, repository: repo, branch: entry.branch || ref, reused: true });
+    }
+    if (owned.size >= MAX_WORKSPACES) throw new ToolInputError(`this answer already has ${owned.size} workspaces; reuse or delete one`);
     progress('create_workspace', 'Creating GitHub Codespace...');
     const { created, key } = await createWithFallback(ref);
-    owned.set(created.name, key);
+    owned.set(created.name, { key, branch: created.branch || ref, checked: true });
+    lastUsed = created.name;
     log.info('agent', `created codespace ${logSafe(created.name)} for ${logSafe(repo)} with the ${key.owner} workspace key`, logMeta);
     const ready = await codespaces.waitUntilAvailable(created.name, () => key.reveal(), {
       onState: (state) => progress('create_workspace', `Codespace ${created.name} is ${state}`),
@@ -133,8 +189,11 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
   }
 
   async function run(workspaceId, command) {
-    const key = ownedKey(workspaceId);
-    return codespaces.executeCommand(String(workspaceId), command, await key.reveal());
+    const name = String(workspaceId || '');
+    const { key } = ownedEntry(name);
+    await ensureRunning(name);
+    lastUsed = name;
+    return codespaces.executeCommand(name, command, await key.reveal());
   }
 
   async function execCommand(args) {
@@ -165,10 +224,11 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
   }
 
   async function deleteWorkspace(args) {
-    const key = ownedKey(args.workspaceId);
+    const { key } = ownedEntry(args.workspaceId);
     progress('delete_workspace', `Deleting codespace ${args.workspaceId}...`);
     await codespaces.deleteCodespace(String(args.workspaceId), await key.reveal());
     owned.delete(String(args.workspaceId));
+    if (lastUsed === String(args.workspaceId)) lastUsed = null;
     return JSON.stringify({ workspaceId: args.workspaceId, deleted: true });
   }
 
@@ -181,9 +241,22 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
     }
   };
 
-  // Deletes every codespace still open. Never throws: the answer is already decided.
+  // Keeps the codespace used last for the next message of the conversation (when there is a
+  // scope and keeping is on) and deletes every other one still open. Never throws: the answer is
+  // already decided.
   async function cleanup() {
-    for (const [name, key] of [...owned]) {
+    if (lastUsed && owned.has(lastUsed)) {
+      const { key, branch: keptBranch } = owned.get(lastUsed);
+      try {
+        if (await keeper.keep(scope, { name: lastUsed, repo, branch: keptBranch, key })) {
+          owned.delete(lastUsed);
+          log.info('agent', `keeping codespace ${logSafe(lastUsed)} for the next message`, logMeta);
+        }
+      } catch (err) {
+        log.warn('agent', `could not keep codespace ${logSafe(lastUsed)}: ${logSafe(err.message)}`, logMeta);
+      }
+    }
+    for (const [name, { key }] of [...owned]) {
       try {
         await codespaces.deleteCodespace(name, await key.reveal());
         owned.delete(name);
@@ -201,7 +274,7 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
     delete_workspace: wrap('delete_workspace', deleteWorkspace),
   };
   // cleanup sits beside the handlers, never among them, so the model cannot call it as a tool.
-  return { handlers, cleanup, openWorkspaces: () => [...owned.keys()] };
+  return { handlers, cleanup, openWorkspaces: () => [...owned.keys()], reused: kept ? kept.name : null };
 }
 
 module.exports = { WORKSPACE_TOOLS, createWorkspaceTools, clipOutput, shellQuote, MAX_OUTPUT_CHARS, MAX_WORKSPACES };

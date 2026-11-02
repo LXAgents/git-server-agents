@@ -16,6 +16,12 @@ function ownerId(name) {
   if (ids.length > 1) throw new Error(`${name} must be one numeric user ID: a platform has only one owner`);
   return ids[0] || '';
 }
+// WORKSPACE_KEEP_MINUTES: 0 to 43200 (GitHub's retention limit, 30 days); unset or not a number
+// means 60.
+function keepMinutes(value) {
+  const n = value === undefined || String(value).trim() === '' ? NaN : Number(value);
+  return Number.isFinite(n) ? Math.min(43_200, Math.max(0, Math.floor(n))) : 60;
+}
 const gitlabApiUrl = process.env.GITLAB_API_URL || 'https://gitlab.com/api/v4';
 
 module.exports = {
@@ -77,6 +83,10 @@ module.exports = {
     execTimeoutMs: Number(process.env.WORKSPACE_EXEC_TIMEOUT_MS) || 300_000,
     // GitHub stops an idle codespace after this many minutes (5 to 240).
     idleTimeoutMinutes: Math.min(240, Math.max(5, Number(process.env.WORKSPACE_IDLE_TIMEOUT_MINUTES) || 10)),
+    // How long a codespace stays after the answer that used it, for the next message in the same
+    // chat session or issue/pull request thread. 0 deletes it when the answer ends. GitHub also
+    // deletes it this long after it stops (retention period), even if the server restarts.
+    keepMinutes: keepMinutes(process.env.WORKSPACE_KEEP_MINUTES),
     // The gh CLI that runs commands over `gh codespace ssh`.
     ghPath: process.env.GH_PATH || 'gh',
   },

@@ -45,7 +45,7 @@ test('creates a codespace on the branch with an idle timeout, and reads its stat
   const created = await cs.createCodespace('acme/web', 'fix/login', 'ghp_good');
   assert.deepEqual([created.name, created.state, created.repository, created.branch], ['cs-1', 'Queued', 'acme/web', 'fix/login']);
   const post = seen.find((r) => r.method === 'POST');
-  assert.deepEqual(post.body, { idle_timeout_minutes: 10, ref: 'fix/login' });
+  assert.deepEqual(post.body, { idle_timeout_minutes: 10, retention_period_minutes: 60, ref: 'fix/login' });
   const ready = await cs.waitUntilAvailable('cs-1', async () => 'ghp_good', { pollMs: 1 });
   assert.equal(ready.state, 'Available');
 });

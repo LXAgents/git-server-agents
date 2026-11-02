@@ -105,7 +105,7 @@ function roomThread(room, platform) {
 // The tools for a repo room: files at the default branch, issues, pull requests and commits the
 // message mentions, and for writers (checked on the platform for every message) the manage tools
 // and, on GitHub with a key, the workspace tools.
-async function roomTools(room, user, choice, send, prompt) {
+async function roomTools(room, user, choice, send, prompt, sessionId = null) {
   if (room.kind !== 'repo' || !room.defaultBranch) return { repo: null, workspace: null, guide: null };
   const api = platformOf(user.platform);
   const repository = room.repository;
@@ -123,6 +123,8 @@ async function roomTools(room, user, choice, send, prompt) {
         repo: repository.fullName,
         defaultBranch: room.defaultBranch,
         keys: wsKeys,
+        // The next message in the same session reuses the codespace.
+        scope: sessionId ? `chat:${room.room}:${sessionId}` : null,
         onProgress: ({ tool, status }) => send.live({ type: 'progress', sender: AGENT, content: status, data: { status, tool } }),
       });
     }
@@ -144,7 +146,7 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
   try {
     const choice = await chooseModelAndKeys(room, user, model);
     chosenModel = choice.model;
-    const tools = await roomTools(room, user, choice, send, prompt);
+    const tools = await roomTools(room, user, choice, send, prompt, sessionId);
     workspace = tools.workspace;
     const { rounds } = parseLoopLimit(prompt);
     const limitMs = workspace ? config.workspace.taskTimeoutMs : config.ai.taskTimeoutMs;
@@ -170,7 +172,7 @@ async function answer({ room, user, sessionId, question, prompt, model, send }) 
           request,
           apiKey: key.apiKey,
           system: systemPrompt(room, user),
-          toolGuide: tools.repo ? buildToolGuide({ rounds, ...tools.guide, workspace: Boolean(workspace) }) : '',
+          toolGuide: tools.repo ? buildToolGuide({ rounds, ...tools.guide, workspace: Boolean(workspace), reusedWorkspace: workspace && workspace.reused }) : '',
           maxRounds: rounds,
           history,
           question: `@${user.login}: ${prompt}`,
