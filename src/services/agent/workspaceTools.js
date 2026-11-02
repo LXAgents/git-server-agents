@@ -112,7 +112,7 @@ function createWorkspaceTools({ repo, defaultBranch = null, branch = null, keys,
         lastError = err;
         const status = err.response && err.response.status;
         if (!(KEY_REFUSALS.has(status) || err.code === 'NO_WORKSPACE_KEY')) throw err;
-        log.warn('agent', `${key.owner} workspace key ${key.id} refused (${status || err.code}), trying the next`, logMeta);
+        log.warn('agent', `${key.owner} workspace key ${key.id} refused (${logSafe(status || err.code)}), trying the next`, logMeta);
       }
     }
     throw lastError;

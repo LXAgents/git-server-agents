@@ -4,6 +4,7 @@
 const bus = require('./bus');
 const store = require('./chatStore');
 const { makeEvent } = require('./events');
+const { logSafe } = require('../../utils/strings');
 const log = require('../logService');
 
 const STORED = new Set(['message', 'report']);
@@ -20,7 +21,7 @@ async function emit(target, fields) {
     bus.publish(target.key, event);
     return event;
   } catch (err) {
-    log.warn('chat', `could not send a ${fields.type} event: ${err.message}`);
+    log.warn('chat', `could not send a ${fields.type} event: ${logSafe(err.message)}`);
     return null;
   }
 }
