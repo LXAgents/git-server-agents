@@ -8,6 +8,7 @@ const { userSender } = require('../services/chat/events');
 const chatAgent = require('../services/chat/chatAgent');
 const { HttpError } = require('../errors');
 const log = require('../services/logService');
+const { logSafe } = require('../utils/strings');
 
 const HEARTBEAT_MS = 25_000;
 // An open stream checks the room again this often and closes once the caller lost access.
@@ -106,7 +107,7 @@ async function stream(req, res) {
   };
   req.on('close', close);
   res.on('close', close);
-  log.info('chat', `stream opened on a ${room.kind} room`, { platform: req.user.platform });
+  log.info('chat', `stream opened on a ${logSafe(room.kind)} room`, { platform: req.user.platform });
 }
 
 module.exports = { listRooms, listSessions, createSession, renameSession, deleteSession, listMessages, postMessage, stream };
