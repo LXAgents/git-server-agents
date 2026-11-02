@@ -86,9 +86,20 @@ newest 5000 answers and reports; answers stored before 1.19.0 and error replies 
 
 The provider, model and keys follow the room: repo room → the repository's, then the org's (for
 org members), then yours; org room → the org's, then yours; user room → yours. A repo room also
-gives the agent the read tools at the default branch and, for writers on GitHub with a workspace
-key, the workspace tools (see [Asking the agent](asking-the-agent.md)). One answer at a time per
-session.
+gives the agent the same tools as an answer to a comment (see [Asking the agent](asking-the-agent.md)):
+
+- `list_files` and `read_file` at the default branch, for everyone in the room.
+- `read_issue`, `read_pull_request`, `list_commits` and `read_commit` for the issues, pull requests
+  (merge requests on GitLab) and commits your message mentions.
+- For members with write access (GitHub write, maintain or admin; GitLab Developer or higher),
+  checked again for every message: `create_issue`, `close_issue`, `reopen_issue`,
+  `create_pull_request`, `close_pull_request` and `reopen_pull_request`. A room has no issue of
+  its own, so closing or reopening one needs its number. Readers are told they cannot change
+  anything.
+- On GitHub, for writers with a workspace key, the workspace tools.
+
+Organization and personal rooms have no repository, so the agent has no tools there. One answer at
+a time per session.
 
 ## Limits
 
