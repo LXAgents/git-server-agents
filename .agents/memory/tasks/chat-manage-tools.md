@@ -1,7 +1,7 @@
 ---
 name: chat-manage-tools
 description: Task record for giving the chat agent the issue and pull request tools in repository rooms (1.19.1).
-status: in progress
+status: done
 ---
 
 # Manage tools in chat rooms
@@ -21,6 +21,6 @@ status: in progress
 
 | # | Title | Scope | Repository | Branch | Files / areas | PR |
 |---|---|---|---|---|---|---|
-| 1 | Task record | This record | git-server-agents | `plan/chat-manage-tools` | `.agents/` | |
-| 2 | Chat manage tools | Tools, prompt, tests, docs | git-server-agents | `fix/chat-manage-tools` | `src/services/chat/`, `test/`, `wiki/` | |
-| 3 | Release | 1.19.1 changelog and version | git-server-agents | `release/1.19.1` | `wiki/logs/`, `package.json` | |
+| 1 | Task record | This record | git-server-agents | `plan/chat-manage-tools` | `.agents/` | #97 |
+| 2 | Chat manage tools | Tools, prompt, tests, docs | git-server-agents | `fix/chat-manage-tools` | `src/services/chat/`, `test/`, `wiki/` | #98 |
+| 3 | Release | 1.19.1 changelog and version | git-server-agents | `release/1.19.1` | `wiki/logs/`, `package.json` | #99 |
