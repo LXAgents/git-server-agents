@@ -2,6 +2,7 @@
 
 | Version | Summary | Files |
 |---|---|---|
+| [1.21.0](1/21/0/CHANGELOG.md) | Agent sessions with AGENTS.md and MEMORY.md, queued questions from several people, session tools | `CHANGELOG.md` |
 | [1.20.0](1/20/0/CHANGELOG.md) | The agent keeps its codespace between messages of a chat session or thread | `CHANGELOG.md` |
 | [1.19.2](1/19/2/CHANGELOG.md) | Commands in codespaces run in full, not only their first word | `CHANGELOG.md` |
 | [1.19.1](1/19/1/CHANGELOG.md) | Chat agent can create, close and reopen issues and pull requests in repository rooms | `CHANGELOG.md` |
